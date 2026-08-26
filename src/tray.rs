@@ -1,7 +1,8 @@
 use crate::i18n::{Language, t};
 use anyhow::Result;
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
-use std::sync::mpsc::Sender;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
@@ -26,7 +27,7 @@ fn menu(casting: bool, lang: Language) -> Menu {
         .item(MenuItem::button(QUIT, quit))
 }
 
-pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
+pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
     let icon = tray_icon()?;
     let lang = crate::i18n::lang();
     let tray = match Tray::new(
@@ -42,7 +43,18 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
     };
     let handle = tray.handle();
     let mut casting = false;
+
+    let quit_flag = Arc::new(AtomicBool::new(false));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&quit_flag));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&quit_flag));
+
     tray.run(move |event| {
+        if quit_flag.load(Ordering::Relaxed) {
+            let _ = sender.send(crate::app::Command::Quit);
+            let _ = handle.quit();
+            return;
+        }
         if let Event::Menu(id) = event {
             let command = match id.0 {
                 TOGGLE_CAST => crate::app::Command::ToggleCast,

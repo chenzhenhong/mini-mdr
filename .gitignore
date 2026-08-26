@@ -1,2 +1,6 @@
 /target
 *.sock
+aur/mini-mdr
+aur/pkg
+aur/*.pkg.tar.zst
+aur/src/
