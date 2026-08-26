@@ -251,16 +251,16 @@ impl Drop for MpvSession {
         if let Err(error) = self.child.kill()
             && error.kind() != std::io::ErrorKind::InvalidInput
         {
-            eprintln!("stopping mpv: {error}");
+            crate::log_error!("stopping mpv: {error}");
         }
         if let Err(error) = self.child.wait() {
-            eprintln!("waiting for mpv: {error}");
+            crate::log_error!("waiting for mpv: {error}");
         }
         #[cfg(unix)]
         if let Err(error) = std::fs::remove_file(&self.socket_path)
             && error.kind() != std::io::ErrorKind::NotFound
         {
-            eprintln!("removing mpv IPC socket: {error}");
+            crate::log_error!("removing mpv IPC socket: {error}");
         }
     }
 }

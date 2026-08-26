@@ -37,14 +37,14 @@ impl SettingsServer {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
                             if let Err(error) = serve(&mut stream, address, &config, &state) {
-                                eprintln!("settings request failed: {error:#}");
+                                crate::log_error!("settings request failed: {error:#}");
                             }
                         }
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(50));
                         }
                         Err(error) => {
-                            eprintln!("settings listener failed: {error}");
+                            crate::log_error!("settings listener failed: {error}");
                             break;
                         }
                     }
@@ -320,7 +320,7 @@ impl Drop for SettingsServer {
         if let Some(thread) = self.thread.take()
             && let Err(error) = thread.join()
         {
-            eprintln!("settings thread panicked: {error:?}");
+            crate::log_error!("settings thread panicked: {error:?}");
         }
     }
 }

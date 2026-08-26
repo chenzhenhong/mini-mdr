@@ -48,7 +48,7 @@ impl App {
                 Command::Quit => break,
             };
             if let Err(error) = result {
-                eprintln!("application command failed: {error:#}");
+                crate::log_error!("application command failed: {error:#}");
             }
         }
         self.stop_cast()?;
@@ -94,7 +94,7 @@ impl App {
             && let Ok(mut player) = player.lock()
             && let Err(error) = player.stop()
         {
-            eprintln!("stopping current media: {error:#}");
+            crate::log_error!("stopping current media: {error:#}");
         }
         self.cast = None;
         self.player = None;

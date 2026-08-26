@@ -78,14 +78,14 @@ impl UpnpServer {
                             if let Err(error) =
                                 serve(&mut stream, &name, &player, &state, &subscriptions)
                             {
-                                eprintln!("UPnP request failed: {error:#}");
+                                crate::log_error!("UPnP request failed: {error:#}");
                             }
                         }
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(30));
                         }
                         Err(error) => {
-                            eprintln!("UPnP listener failed: {error}");
+                            crate::log_error!("UPnP listener failed: {error}");
                             break;
                         }
                     }
@@ -516,7 +516,7 @@ fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &st
     };
     let body = event_body(service, &state);
     if let Err(error) = send_notify(&callback, sid, sequence, &body) {
-        eprintln!("GENA notification to {callback} failed: {error:#}");
+        crate::log_error!("GENA notification to {callback} failed: {error:#}");
     }
 }
 
@@ -747,7 +747,7 @@ impl UpnpError {
     }
 }
 fn player_error(error: anyhow::Error) -> UpnpError {
-    eprintln!("player action failed: {error:#}");
+    crate::log_error!("player action failed: {error:#}");
     UpnpError::new(501, "Action Failed")
 }
 fn lock_player(
@@ -769,7 +769,7 @@ fn refresh_player_state(player: &SharedPlayer, state: &SharedState) {
     let status = player.lock().ok().and_then(|mut player| {
         player
             .status()
-            .map_err(|error| eprintln!("reading player status: {error:#}"))
+            .map_err(|error| crate::log_error!("reading player status: {error:#}"))
             .ok()
     });
     if let (Some(status), Ok(mut state)) = (status, state.lock()) {
@@ -924,7 +924,7 @@ impl Drop for UpnpServer {
         if let Some(thread) = self.thread.take()
             && let Err(error) = thread.join()
         {
-            eprintln!("UPnP thread panicked: {error:?}");
+            crate::log_error!("UPnP thread panicked: {error:?}");
         }
     }
 }

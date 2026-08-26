@@ -25,7 +25,7 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
     let tray = match Tray::new(TrayConfig::new(icon).tooltip("mini-mdr").menu(menu(false))) {
         Ok(tray) => tray,
         Err(error) => {
-            eprintln!("tray unavailable: {error}");
+            crate::log_error!("tray unavailable: {error}");
             return Ok(());
         }
     };
@@ -40,18 +40,18 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
                 _ => return,
             };
             if let Err(error) = sender.send(command) {
-                eprintln!("sending tray command: {error}");
+                crate::log_error!("sending tray command: {error}");
             }
             if id.0 == TOGGLE_CAST {
                 casting = !casting;
                 if let Err(error) = handle.set_menu(menu(casting)) {
-                    eprintln!("updating tray menu: {error}");
+                    crate::log_error!("updating tray menu: {error}");
                 }
             }
             if id.0 == QUIT
                 && let Err(error) = handle.quit()
             {
-                eprintln!("stopping tray event loop: {error}");
+                crate::log_error!("stopping tray event loop: {error}");
             }
         }
     })?;

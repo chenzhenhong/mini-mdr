@@ -56,7 +56,7 @@ impl SsdpServer {
                             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                         ) => {}
                     Err(error) => {
-                        eprintln!("SSDP receive failed: {error}");
+                        crate::log_error!("SSDP receive failed: {error}");
                         break;
                     }
                 }
@@ -115,7 +115,7 @@ fn respond_to_search(
             "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nEXT:\r\nLOCATION: {location}\r\nSERVER: {name}/1.0 UPnP/1.1 mini-mdr/0.1\r\nST: {target}\r\nUSN: {usn}\r\n\r\n"
         );
         if let Err(error) = socket.send_to(response.as_bytes(), peer) {
-            eprintln!("sending SSDP response: {error}");
+            crate::log_error!("sending SSDP response: {error}");
         }
     }
 }
@@ -133,7 +133,7 @@ fn announce(socket: &UdpSocket, location: &str, name: &str, nts: &str) {
         }
         message.push_str("\r\n");
         if let Err(error) = socket.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
-            eprintln!("sending SSDP {nts}: {error}");
+            crate::log_error!("sending SSDP {nts}: {error}");
         }
     }
 }
@@ -182,7 +182,7 @@ impl Drop for SsdpServer {
         if let Some(thread) = self.thread.take()
             && let Err(error) = thread.join()
         {
-            eprintln!("SSDP thread panicked: {error:?}");
+            crate::log_error!("SSDP thread panicked: {error:?}");
         }
     }
 }

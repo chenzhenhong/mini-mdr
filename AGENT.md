@@ -201,6 +201,11 @@ new fields by using serde defaults or an explicit migration strategy.
 ## Coding Rules
 
 - Prefer small, clear changes over broad rewrites.
+- Release builds run under the Windows GUI subsystem
+  (`windows_subsystem = "windows"` via cfg_attr in `src/main.rs`), so there is
+  no console and stderr writes would fail. Never use `eprintln!`/`println!`;
+  use the panic-free `crate::log_error!` / `log_warn!` / `log_info!` macros
+  from `src/log.rs`.
 - Use `anyhow::Result` at application boundaries and preserve actionable error
   context.
 - Do not use `unwrap()` or `expect()` in production paths.
