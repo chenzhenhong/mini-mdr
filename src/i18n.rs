@@ -58,10 +58,10 @@ pub fn t_args(lang: Language, key: &str, args: &[(&str, &str)]) -> String {
             Some(p) => p,
             None => return key.to_owned(),
         };
-        let fluent_args: FluentArgs = args
-            .iter()
-            .map(|(k, v)| ((*k).to_string(), (*v).to_string().into()))
-            .collect();
+        let mut fluent_args: FluentArgs = FluentArgs::with_capacity(args.len());
+        for (k, v) in args {
+            fluent_args.insert((*k).to_string(), (*v).to_string().into());
+        }
         let mut errors = vec![];
         bundle
             .format_pattern(pattern, Some(&fluent_args), &mut errors)
