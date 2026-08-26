@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    i18n::{Language, lang, s},
+    i18n::{Language, lang, t},
     state::RendererState,
 };
 use anyhow::{Context, Result};
@@ -101,11 +101,7 @@ fn serve(
             let fields = parse_form(body)?;
             let updated = update_config(config, &fields, lang);
             let message = match updated {
-                Ok(()) => s!(
-                    lang,
-                    "设置已保存。设备名称和播放器设置将在下次开始 Cast 时生效。",
-                    "Settings saved. Device name and player settings take effect on the next Start Cast."
-                ),
+                Ok(()) => t(lang, "settings-saved"),
                 Err(error) => {
                     return respond(
                         stream,
@@ -115,7 +111,7 @@ fn serve(
                             config,
                             state,
                             lang,
-                            Some(&format!("{}: {error}", s!(lang, "保存失败", "Save failed"))),
+                            Some(&format!("{}: {error}", t(lang, "error-save-failed"))),
                         ),
                     );
                 }
@@ -124,7 +120,7 @@ fn serve(
                 stream,
                 "200 OK",
                 "text/html; charset=utf-8",
-                &page(config, state, lang, Some(message)),
+                &page(config, state, lang, Some(&message)),
             )
         }
         ("GET", "/health") => respond(stream, "200 OK", "text/plain; charset=utf-8", "ok\n"),
@@ -211,28 +207,16 @@ fn update_config(
         .map(|value| value.trim())
         .unwrap_or_default();
     if name.is_empty() || name.len() > 128 {
-        anyhow::bail!(s!(
-            lang,
-            "设备名称必须为 1 到 128 个字符",
-            "Device name must be 1 to 128 characters"
-        ));
+        anyhow::bail!(t(lang, "error-name-length"));
     }
     if name.chars().any(char::is_control) {
-        anyhow::bail!(s!(
-            lang,
-            "设备名称不能包含控制字符",
-            "Device name must not contain control characters"
-        ));
+        anyhow::bail!(t(lang, "error-name-control"));
     }
     if backend != "mpv" {
-        anyhow::bail!(s!(
-            lang,
-            "当前版本只提供 mpv 后端",
-            "Only mpv backend is available in this version"
-        ));
+        anyhow::bail!(t(lang, "error-only-mpv"));
     }
     if mpv_path.is_empty() {
-        anyhow::bail!(s!(lang, "mpv 路径不能为空", "mpv path must not be empty"));
+        anyhow::bail!(t(lang, "error-mpv-path-empty"));
     }
     let mut guard = config
         .lock()
@@ -287,23 +271,22 @@ fn page(
     let message = message
         .map(|value| format!("<div class=\"notice\">{}</div>", escape_html(value)))
         .unwrap_or_default();
-    let title = s!(lang, "mini-mdr 设置", "mini-mdr Settings");
-    let subtitle = s!(
-        lang,
-        "本地 DMR 设置与运行状态",
-        "Local DMR settings and runtime status"
-    );
-    let section_status = s!(lang, "状态", "Status");
-    let label_transport = s!(lang, "传输状态", "Transport");
-    let label_volume = s!(lang, "音量", "Volume");
-    let muted_label = s!(lang, "（静音）", " (muted)");
-    let section_settings = s!(lang, "设置", "Settings");
-    let label_name = s!(lang, "设备名称", "Device Name");
-    let label_backend = s!(lang, "播放器后端", "Player Backend");
-    let label_mpv_path = s!(lang, "mpv 可执行文件路径", "mpv Executable Path");
-    let btn_save = s!(lang, "保存设置", "Save Settings");
-    let muted_display = if state.muted { muted_label } else { "" };
-    let html_lang = s!(lang, "zh-CN", "en");
+    let title = t(lang, "settings-title");
+    let subtitle = t(lang, "settings-subtitle");
+    let section_status = t(lang, "settings-section-status");
+    let label_transport = t(lang, "settings-transport");
+    let label_volume = t(lang, "settings-volume");
+    let muted_label = t(lang, "settings-muted");
+    let section_settings = t(lang, "settings-section-settings");
+    let label_name = t(lang, "settings-device-name");
+    let label_backend = t(lang, "settings-player-backend");
+    let label_mpv_path = t(lang, "settings-mpv-path");
+    let btn_save = t(lang, "settings-save");
+    let muted_display = if state.muted { &muted_label } else { "" };
+    let html_lang = match lang {
+        Language::Zh => "zh-CN",
+        Language::En => "en",
+    };
     format!(
         r#"<!doctype html>
 <html lang="{html_lang}">
@@ -329,8 +312,8 @@ button {{ margin-top:22px; padding:11px 18px; border:0; border-radius:7px; backg
 <label for="backend">{label_backend}</label><select id="backend" name="backend"><option value="mpv" selected>mpv</option></select>
 <label for="mpv_path">{label_mpv_path}</label><input id="mpv_path" name="mpv_path" required value="{mpv_path}">
 <button type="submit">{btn_save}</button></form></section></body></html>"#,
-        cast = escape_html(state.cast.as_str(lang)),
-        transport = escape_html(state.transport.as_str(lang)),
+        cast = escape_html(&state.cast.as_str(lang)),
+        transport = escape_html(&state.transport.as_str(lang)),
         volume = state.volume,
         muted = muted_display,
         name = escape_html(&config.device.name),

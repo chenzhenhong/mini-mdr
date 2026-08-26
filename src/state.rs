@@ -1,4 +1,4 @@
-use crate::i18n::{Language, s};
+use crate::i18n::{Language, t};
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -8,18 +8,12 @@ pub enum CastState {
 }
 
 impl CastState {
-    pub fn as_str(self, lang: Language) -> &'static str {
-        s!(
-            lang,
-            match self {
-                Self::Stopped => "已停止",
-                Self::Running => "运行中",
-            },
-            match self {
-                Self::Stopped => "Stopped",
-                Self::Running => "Running",
-            }
-        )
+    pub fn as_str(self, lang: Language) -> String {
+        let key = match self {
+            Self::Stopped => "cast-stopped",
+            Self::Running => "cast-running",
+        };
+        t(lang, key)
     }
 }
 
@@ -33,24 +27,15 @@ pub enum TransportState {
 }
 
 impl TransportState {
-    pub fn as_str(self, lang: Language) -> &'static str {
-        s!(
-            lang,
-            match self {
-                Self::NoMediaPresent => "无媒体",
-                Self::Stopped => "已停止",
-                Self::Playing => "播放中",
-                Self::PausedPlayback => "已暂停",
-                Self::Transitioning => "加载中",
-            },
-            match self {
-                Self::NoMediaPresent => "No Media",
-                Self::Stopped => "Stopped",
-                Self::Playing => "Playing",
-                Self::PausedPlayback => "Paused",
-                Self::Transitioning => "Loading",
-            }
-        )
+    pub fn as_str(self, lang: Language) -> String {
+        let key = match self {
+            Self::NoMediaPresent => "transport-no-media",
+            Self::Stopped => "transport-stopped",
+            Self::Playing => "transport-playing",
+            Self::PausedPlayback => "transport-paused",
+            Self::Transitioning => "transport-loading",
+        };
+        t(lang, key)
     }
 
     pub fn upnp_value(self) -> &'static str {

@@ -1,4 +1,4 @@
-use crate::i18n::{Language, s};
+use crate::i18n::{Language, t};
 use anyhow::Result;
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
 use std::sync::mpsc::Sender;
@@ -12,17 +12,14 @@ const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
     include_bytes!("../resources/icon.rgba");
 
 fn menu(casting: bool, lang: Language) -> Menu {
-    let toggle = s!(
-        lang,
-        if casting {
-            "停止 Cast"
-        } else {
-            "开始 Cast"
-        },
-        if casting { "Stop Cast" } else { "Start Cast" }
-    );
-    let settings = s!(lang, "打开设置", "Open Settings");
-    let quit = s!(lang, "退出程序", "Quit");
+    let key = if casting {
+        "tray-stop-cast"
+    } else {
+        "tray-start-cast"
+    };
+    let toggle = Box::leak(t(lang, key).into_boxed_str());
+    let settings = Box::leak(t(lang, "tray-open-settings").into_boxed_str());
+    let quit = Box::leak(t(lang, "tray-quit").into_boxed_str());
     Menu::new()
         .item(MenuItem::button(TOGGLE_CAST, toggle))
         .item(MenuItem::button(OPEN_SETTINGS, settings))
