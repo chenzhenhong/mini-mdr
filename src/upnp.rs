@@ -699,7 +699,8 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
             }
         }
     }
-    let header_end = crate::util::find_bytes(&data, b"\r\n\r\n").context("incomplete HTTP headers")?;
+    let header_end =
+        crate::util::find_bytes(&data, b"\r\n\r\n").context("incomplete HTTP headers")?;
     let headers_text =
         std::str::from_utf8(&data[..header_end]).context("HTTP headers are not UTF-8")?;
     let mut lines = headers_text.lines();

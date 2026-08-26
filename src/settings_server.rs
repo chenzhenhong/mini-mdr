@@ -397,8 +397,6 @@ fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-
-
 impl Drop for SettingsServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
