@@ -25,6 +25,9 @@
   Unix 套接字）；mpv 进程在首次加载媒体时懒启动
 - 仅托盘应用控制，包含动态的开始/停止 Cast 标签
 - 懒启动的本地设置服务器，带可编辑表单，持久化保存配置
+- 媒体历史记录跟踪，可配置最大条目数（持久化到磁盘）
+- 信号处理，支持干净关闭（Unix 上的 SIGINT、SIGHUP、SIGTERM）
+- 启动时自动开始 Cast
 - 内嵌 32x32 RGBA8 托盘图标，启动时无需图片解码
 - 国际化支持：中文和英文，根据系统语言环境自动检测
 
@@ -81,8 +84,8 @@ Windows 上请使用 MSVC Rust 工具链。Linux 桌面环境必须提供兼容�
 cargo run
 ```
 
-应用启动时仅显示托盘。只有在点击对应菜单项后，才会启动设置 HTTP 服务器
-或 Cast 服务。
+应用启动时自动开始 Cast 服务。设置 HTTP 服务器是懒启动的，只有在首次点击
+`打开设置` 时才会启动。
 
 ## 运行行为
 
@@ -119,7 +122,7 @@ cargo run
 
 ```toml
 [device]
-name = "mini-mdr"
+name = "mini-mdr(<hostname>)"   # hostname 来自 $HOSTNAME 或 $HOST
 
 [player]
 backend = "mpv"
@@ -127,7 +130,11 @@ mpv_path = "mpv"
 
 [settings]
 port = 7878
+max_history = 200
 ```
+
+设备名称默认包含系统主机名（例如 `mini-mdr(laptop)`）。历史记录条目持久化
+保存到配置目录下的 `history.json` 文件。
 
 配置从 `directories` crate 提供的平台特定用户配置目录加载。如果配置文件
 不存在，则使用上述默认值。
@@ -176,10 +183,9 @@ PlayerBackend
 使用以下命令格式化和验证项目：
 
 ```text
-cargo fmt -- --check
-cargo check
-cargo test
+cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
 测试播放前，请确认 mpv 可用：
@@ -199,6 +205,16 @@ mpv --version
 
 ## 项目状态
 
-这是一个早期 MVP，代码应视为活跃开发中。最高优先级的后续工作包括：
-连接所有标准 AVTransport 查询动作、实现 GENA、改进 HTTP/SSDP 生命周期处理、
-添加配置编辑功能以及添加自动化协议测试。
+这是一个处于活跃开发阶段的早期 MVP。当前状态：
+
+- 核心 UPnP/DLNA 协议已实现（AVTransport、ConnectionManager、RenderingControl）
+- SSDP 发现和生命周期管理正常工作
+- mpv 后端通过 JSON IPC 控制
+- 系统托盘集成，支持开始/停止 Cast、设置和退出
+- 设置页面支持配置编辑和媒体历史记录
+- 历史记录持久化到磁盘，可配置最大条目数
+- Unix 上的信号处理，支持干净关闭
+- Arch Linux 的 AUR 打包
+
+优先后续工作：并发请求处理、持久化每安装的 UPnP UDN、DIDLLite 元数据、
+从后端动态获取协议信息以及集成测试。

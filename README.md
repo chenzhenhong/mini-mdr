@@ -25,6 +25,9 @@ controlled through mpv's JSON IPC interface.
   elsewhere); the mpv process starts lazily on first media load
 - System-tray-only application control with a dynamic Start/Stop Cast label
 - Lazy local settings server with an editable form that persists configuration
+- Media history tracking with configurable max entries (persisted to disk)
+- Signal handling for clean shutdown (SIGINT, SIGHUP, SIGTERM on Unix)
+- Auto-start cast on launch
 - Embedded 32x32 RGBA8 tray icon with no runtime image decoding
 - i18n support: English and Chinese, auto-detected from system locale
 
@@ -83,8 +86,8 @@ Install `mpv`, then run:
 cargo run
 ```
 
-The application starts with the tray only. It does not start the settings HTTP
-server or Cast services until their corresponding menu action is selected.
+The application starts with Cast services enabled. The settings HTTP server is
+lazy and only starts when `Open Settings` is first selected.
 
 ## Runtime Behavior
 
@@ -123,7 +126,7 @@ The default configuration is:
 
 ```toml
 [device]
-name = "mini-mdr"
+name = "mini-mdr(<hostname>)"   # hostname from $HOSTNAME or $HOST
 
 [player]
 backend = "mpv"
@@ -131,7 +134,11 @@ mpv_path = "mpv"
 
 [settings]
 port = 7878
+max_history = 200
 ```
+
+Device name includes the system hostname by default (e.g., `mini-mdr(laptop)`).
+History entries are persisted to `history.json` in the same config directory.
 
 The configuration is loaded from the platform-specific user configuration
 directory provided by the `directories` crate. If no file exists, these
@@ -186,10 +193,9 @@ is static rather than derived from the active player backend.
 Format and verify the project with:
 
 ```text
-cargo fmt -- --check
-cargo check
-cargo test
+cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
 Before testing playback, verify that mpv is available:
@@ -209,7 +215,17 @@ Useful manual checks:
 
 ## Project Status
 
-This is an early MVP and the code should be treated as active development. The
-highest-priority follow-up work is to connect all standard AVTransport query
-actions, implement GENA, improve HTTP/SSDP lifecycle handling, add configuration
-editing, and add automated protocol tests.
+This is an early MVP under active development. Current status:
+
+- Core UPnP/DLNA protocol implemented (AVTransport, ConnectionManager, RenderingControl)
+- SSDP discovery and lifecycle management working
+- mpv backend with JSON IPC control
+- System tray integration with start/stop cast, settings, and quit
+- Settings page with configuration editing and media history
+- History persistence to disk with configurable max entries
+- Signal handling for clean shutdown on Unix
+- AUR packaging for Arch Linux
+
+Priority follow-up work: concurrent request handling, persistent per-install
+UPnP UDN, DIDLLite metadata, dynamic protocol info from backend, and
+integration tests.
