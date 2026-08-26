@@ -33,23 +33,39 @@ pub struct SettingsConfig {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            device: DeviceConfig { name: "mini-mdr".into() },
-            player: PlayerConfig { backend: "mpv".into(), mpv_path: "mpv".into() },
+            device: DeviceConfig {
+                name: "mini-mdr".into(),
+            },
+            player: PlayerConfig {
+                backend: "mpv".into(),
+                mpv_path: "mpv".into(),
+            },
             settings: SettingsConfig { port: 7878 },
         }
     }
 }
 
 impl Default for DeviceConfig {
-    fn default() -> Self { Self { name: "mini-mdr".into() } }
+    fn default() -> Self {
+        Self {
+            name: "mini-mdr".into(),
+        }
+    }
 }
 
 impl Default for PlayerConfig {
-    fn default() -> Self { Self { backend: "mpv".into(), mpv_path: "mpv".into() } }
+    fn default() -> Self {
+        Self {
+            backend: "mpv".into(),
+            mpv_path: "mpv".into(),
+        }
+    }
 }
 
 impl Default for SettingsConfig {
-    fn default() -> Self { Self { port: 7878 } }
+    fn default() -> Self {
+        Self { port: 7878 }
+    }
 }
 
 impl Config {
@@ -64,13 +80,16 @@ impl Config {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
         toml::from_str(&text).context("parsing configuration")
     }
 
     pub fn save(&self) -> Result<()> {
         let path = Self::path()?;
-        if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         let text = toml::to_string_pretty(self).context("serializing configuration")?;
         fs::write(path, text).context("writing configuration")
     }

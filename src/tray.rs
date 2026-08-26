@@ -10,7 +10,11 @@ fn menu(casting: bool) -> Menu {
     Menu::new()
         .item(MenuItem::button(
             TOGGLE_CAST,
-            if casting { "停止 Cast" } else { "开始 Cast" },
+            if casting {
+                "停止 Cast"
+            } else {
+                "开始 Cast"
+            },
         ))
         .item(MenuItem::button(OPEN_SETTINGS, "打开设置"))
         .item(MenuItem::button(QUIT, "退出程序"))

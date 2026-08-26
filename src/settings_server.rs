@@ -73,23 +73,53 @@ fn serve(
     let headers = parse_headers(&request);
 
     if !same_origin(&headers, address) {
-        return respond(stream, "403 Forbidden", "text/plain; charset=utf-8", "cross-origin requests are not allowed\n");
+        return respond(
+            stream,
+            "403 Forbidden",
+            "text/plain; charset=utf-8",
+            "cross-origin requests are not allowed\n",
+        );
     }
 
     match (method, path) {
-        ("GET", "/") => respond(stream, "200 OK", "text/html; charset=utf-8", &page(config, state, None)),
+        ("GET", "/") => respond(
+            stream,
+            "200 OK",
+            "text/html; charset=utf-8",
+            &page(config, state, None),
+        ),
         ("POST", "/settings") => {
-            let body = request.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or_default();
+            let body = request
+                .split_once("\r\n\r\n")
+                .map(|(_, body)| body)
+                .unwrap_or_default();
             let fields = parse_form(body)?;
             let updated = update_config(config, &fields);
             let message = match updated {
                 Ok(()) => "设置已保存。设备名称和播放器设置将在下次开始 Cast 时生效。",
-                Err(error) => return respond(stream, "400 Bad Request", "text/html; charset=utf-8", &page(config, state, Some(&format!("保存失败: {error}")))),
+                Err(error) => {
+                    return respond(
+                        stream,
+                        "400 Bad Request",
+                        "text/html; charset=utf-8",
+                        &page(config, state, Some(&format!("保存失败: {error}"))),
+                    );
+                }
             };
-            respond(stream, "200 OK", "text/html; charset=utf-8", &page(config, state, Some(message)))
+            respond(
+                stream,
+                "200 OK",
+                "text/html; charset=utf-8",
+                &page(config, state, Some(message)),
+            )
         }
         ("GET", "/health") => respond(stream, "200 OK", "text/plain; charset=utf-8", "ok\n"),
-        _ => respond(stream, "404 Not Found", "text/plain; charset=utf-8", "Not found\n"),
+        _ => respond(
+            stream,
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "Not found\n",
+        ),
     }
 }
 
@@ -150,7 +180,10 @@ fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
 }
 
 fn update_config(config: &Arc<Mutex<Config>>, fields: &HashMap<String, String>) -> Result<()> {
-    let name = fields.get("device_name").map(String::trim).unwrap_or_default();
+    let name = fields
+        .get("device_name")
+        .map(String::trim)
+        .unwrap_or_default();
     let backend = fields.get("backend").map(String::trim).unwrap_or_default();
     let mpv_path = fields.get("mpv_path").map(String::trim).unwrap_or_default();
     if name.is_empty() || name.len() > 128 {
@@ -165,7 +198,9 @@ fn update_config(config: &Arc<Mutex<Config>>, fields: &HashMap<String, String>) 
     if mpv_path.is_empty() {
         anyhow::bail!("mpv 路径不能为空");
     }
-    let mut guard = config.lock().map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?;
+    let mut guard = config
+        .lock()
+        .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?;
     let mut next = guard.clone();
     next.device.name = name.to_owned();
     next.player.backend = backend.to_owned();
@@ -259,11 +294,18 @@ fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str)
 }
 
 fn escape_html(value: &str) -> String {
-    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 impl Drop for SettingsServer {

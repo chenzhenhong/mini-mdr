@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Child, Command, Stdio},
-    sync::mpsc::{Receiver, RecvTimeoutError, self},
+    sync::mpsc::{self, Receiver, RecvTimeoutError},
     thread,
     time::{Duration, Instant},
 };
@@ -120,7 +120,11 @@ impl MpvSession {
 
     fn command(&mut self, command: Value) -> Result<Value> {
         let value = self.raw_command(command)?;
-        if value.get("error").and_then(Value::as_str).is_some_and(|error| error != "success") {
+        if value
+            .get("error")
+            .and_then(Value::as_str)
+            .is_some_and(|error| error != "success")
+        {
             anyhow::bail!("mpv command failed: {}", value["error"]);
         }
         Ok(value)
@@ -202,7 +206,9 @@ impl PlayerBackend for MpvBackend {
         let idle = self.get_bool("idle-active", true);
         let paused = self.get_bool("pause", false);
         let position = self.get_f64("time-pos", 0.0).max(0.0);
-        let duration = self.get_optional_f64("duration").map(Duration::from_secs_f64);
+        let duration = self
+            .get_optional_f64("duration")
+            .map(Duration::from_secs_f64);
         let volume = self.get_f64("volume", 100.0).clamp(0.0, 100.0) as u8;
         let muted = self.get_bool("mute", false);
         Ok(PlayerStatus {
@@ -261,12 +267,20 @@ impl Drop for MpvSession {
 
 #[cfg(unix)]
 fn ipc_endpoint() -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("mini-mdr-{}-{}.sock", std::process::id(), unique_suffix()))
+    std::env::temp_dir().join(format!(
+        "mini-mdr-{}-{}.sock",
+        std::process::id(),
+        unique_suffix()
+    ))
 }
 
 #[cfg(windows)]
 fn ipc_endpoint() -> std::path::PathBuf {
-    std::path::PathBuf::from(format!(r"\\.\pipe\mini-mdr-{}-{}", std::process::id(), unique_suffix()))
+    std::path::PathBuf::from(format!(
+        r"\\.\pipe\mini-mdr-{}-{}",
+        std::process::id(),
+        unique_suffix()
+    ))
 }
 
 fn unique_suffix() -> u128 {
@@ -286,7 +300,10 @@ fn connect_ipc(endpoint: &std::path::Path) -> std::io::Result<PlatformStream> {
 
 #[cfg(windows)]
 fn connect_ipc(endpoint: &std::path::Path) -> std::io::Result<PlatformStream> {
-    std::fs::OpenOptions::new().read(true).write(true).open(endpoint)
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(endpoint)
 }
 
 fn clone_stream(stream: &PlatformStream) -> std::io::Result<PlatformStream> {

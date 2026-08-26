@@ -9,7 +9,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-const MULTICAST_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250)), 1900);
+const MULTICAST_ADDRESS: SocketAddr =
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250)), 1900);
 const DEVICE_TYPE: &str = "urn:schemas-upnp-org:device:MediaRenderer:1";
 const UDN: &str = "uuid:mini-mdr";
 const SERVICE_AVTRANSPORT: &str = "urn:schemas-upnp-org:service:AVTransport:1";
@@ -31,8 +32,8 @@ pub struct SsdpServer {
 
 impl SsdpServer {
     pub fn start(http_port: u16, device_name: &str) -> Result<Self> {
-        let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1900))
-            .context("binding SSDP UDP port 1900")?;
+        let socket =
+            UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1900)).context("binding SSDP UDP port 1900")?;
         socket.set_read_timeout(Some(Duration::from_millis(300)))?;
         socket.set_multicast_loop_v4(true)?;
         socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)?;
@@ -46,8 +47,14 @@ impl SsdpServer {
             let mut buffer = [0; 4096];
             while active.load(Ordering::Relaxed) {
                 match socket.recv_from(&mut buffer) {
-                    Ok((size, peer)) => respond_to_search(&socket, &buffer[..size], peer, &location, &name),
-                    Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                    Ok((size, peer)) => {
+                        respond_to_search(&socket, &buffer[..size], peer, &location, &name)
+                    }
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                        ) => {}
                     Err(error) => {
                         eprintln!("SSDP receive failed: {error}");
                         break;
@@ -67,9 +74,19 @@ impl SsdpServer {
     }
 }
 
-fn respond_to_search(socket: &UdpSocket, data: &[u8], peer: SocketAddr, location: &str, name: &str) {
+fn respond_to_search(
+    socket: &UdpSocket,
+    data: &[u8],
+    peer: SocketAddr,
+    location: &str,
+    name: &str,
+) {
     let request = String::from_utf8_lossy(data);
-    if !request.lines().next().is_some_and(|line| line.eq_ignore_ascii_case("M-SEARCH * HTTP/1.1")) {
+    if !request
+        .lines()
+        .next()
+        .is_some_and(|line| line.eq_ignore_ascii_case("M-SEARCH * HTTP/1.1"))
+    {
         return;
     }
     let search_target = header(&request, "ST").unwrap_or_default();
@@ -79,10 +96,15 @@ fn respond_to_search(socket: &UdpSocket, data: &[u8], peer: SocketAddr, location
         vec!["upnp:rootdevice"]
     } else if search_target.eq_ignore_ascii_case(UDN) {
         vec![UDN]
-    } else if search_target.eq_ignore_ascii_case(DEVICE_TYPE) || search_target.eq_ignore_ascii_case("urn:schemas-upnp-org:device:MediaRenderer:3") {
+    } else if search_target.eq_ignore_ascii_case(DEVICE_TYPE)
+        || search_target.eq_ignore_ascii_case("urn:schemas-upnp-org:device:MediaRenderer:3")
+    {
         vec![DEVICE_TYPE]
     } else {
-        match ADVERTISED_TARGETS.iter().find(|target| search_target.eq_ignore_ascii_case(*target)) {
+        match ADVERTISED_TARGETS
+            .iter()
+            .find(|target| search_target.eq_ignore_ascii_case(*target))
+        {
             Some(target) => vec![*target],
             None => return,
         }
@@ -105,7 +127,9 @@ fn announce(socket: &UdpSocket, location: &str, name: &str, nts: &str) {
             usn(target)
         );
         if nts == "ssdp:alive" {
-            message.push_str(&format!("CACHE-CONTROL: max-age=1800\r\nLOCATION: {location}\r\n"));
+            message.push_str(&format!(
+                "CACHE-CONTROL: max-age=1800\r\nLOCATION: {location}\r\n"
+            ));
         }
         message.push_str("\r\n");
         if let Err(error) = socket.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
@@ -123,7 +147,16 @@ fn usn(target: &str) -> String {
 }
 
 fn sanitize_header_value(value: &str) -> String {
-    value.chars().map(|character| if character.is_control() { ' ' } else { character }).collect()
+    value
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect()
 }
 
 fn header<'a>(request: &'a str, target: &str) -> Option<&'a str> {
@@ -166,7 +199,10 @@ mod tests {
 
     #[test]
     fn sanitizes_control_characters_in_header_values() {
-        assert_eq!(sanitize_header_value("TV\r\nX-Injected: 1"), "TV  X-Injected: 1");
+        assert_eq!(
+            sanitize_header_value("TV\r\nX-Injected: 1"),
+            "TV  X-Injected: 1"
+        );
         assert_eq!(sanitize_header_value("客厅"), "客厅");
     }
 }

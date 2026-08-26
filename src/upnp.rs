@@ -75,13 +75,9 @@ impl UpnpServer {
                 while active.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
-                            if let Err(error) = serve(
-                                &mut stream,
-                                &name,
-                                &player,
-                                &state,
-                                &subscriptions,
-                            ) {
+                            if let Err(error) =
+                                serve(&mut stream, &name, &player, &state, &subscriptions)
+                            {
                                 eprintln!("UPnP request failed: {error:#}");
                             }
                         }
@@ -133,9 +129,27 @@ fn route(
         ("GET", "/connection_manager.xml") => xml_response(SERVICE_CONNECTION.into()),
         ("GET", "/av_transport.xml") => xml_response(SERVICE_AVTRANSPORT.into()),
         ("GET", "/rendering_control.xml") => xml_response(SERVICE_RENDERING.into()),
-        ("POST", "/ConnectionManager/control") => soap_route(request, EventService::ConnectionManager, player, state, subscriptions),
-        ("POST", "/AVTransport/control") => soap_route(request, EventService::AvTransport, player, state, subscriptions),
-        ("POST", "/RenderingControl/control") => soap_route(request, EventService::RenderingControl, player, state, subscriptions),
+        ("POST", "/ConnectionManager/control") => soap_route(
+            request,
+            EventService::ConnectionManager,
+            player,
+            state,
+            subscriptions,
+        ),
+        ("POST", "/AVTransport/control") => soap_route(
+            request,
+            EventService::AvTransport,
+            player,
+            state,
+            subscriptions,
+        ),
+        ("POST", "/RenderingControl/control") => soap_route(
+            request,
+            EventService::RenderingControl,
+            player,
+            state,
+            subscriptions,
+        ),
         ("SUBSCRIBE", path) => match event_service(path) {
             Some(service) => subscribe(request, service, state, subscriptions),
             None => plain_response("404 Not Found", "Not found\n"),
@@ -189,13 +203,29 @@ fn execute_action(
     state: &SharedState,
 ) -> std::result::Result<(String, bool), UpnpError> {
     match (service, action) {
-        (EventService::ConnectionManager, "GetProtocolInfo") => Ok((action_response(
-            service,
-            action,
-            &format!("<Source></Source><Sink>{}</Sink>", escape_xml(SINK_PROTOCOL_INFO)),
-        ), false)),
-        (EventService::ConnectionManager, "GetCurrentConnectionIDs") => Ok((action_response(service, action, "<ConnectionIDs>0</ConnectionIDs>"), false)),
-        (EventService::ConnectionManager, "GetCurrentConnectionInfo") => Ok((action_response(service, action, "<RcsID>0</RcsID><AVTransportID>0</AVTransportID><ProtocolInfo></ProtocolInfo><PeerConnectionManager></PeerConnectionManager><PeerConnectionID>-1</PeerConnectionID><Direction>Input</Direction><Status>OK</Status>"), false)),
+        (EventService::ConnectionManager, "GetProtocolInfo") => Ok((
+            action_response(
+                service,
+                action,
+                &format!(
+                    "<Source></Source><Sink>{}</Sink>",
+                    escape_xml(SINK_PROTOCOL_INFO)
+                ),
+            ),
+            false,
+        )),
+        (EventService::ConnectionManager, "GetCurrentConnectionIDs") => Ok((
+            action_response(service, action, "<ConnectionIDs>0</ConnectionIDs>"),
+            false,
+        )),
+        (EventService::ConnectionManager, "GetCurrentConnectionInfo") => Ok((
+            action_response(
+                service,
+                action,
+                "<RcsID>0</RcsID><AVTransportID>0</AVTransportID><ProtocolInfo></ProtocolInfo><PeerConnectionManager></PeerConnectionManager><PeerConnectionID>-1</PeerConnectionID><Direction>Input</Direction><Status>OK</Status>",
+            ),
+            false,
+        )),
         (EventService::AvTransport, "SetAVTransportURI") => {
             require_instance_zero(request)?;
             let uri = required_value(&request.body, "CurrentURI")?;
@@ -258,7 +288,17 @@ fn execute_action(
             require_instance_zero(request)?;
             refresh_player_state(player, state);
             let state = lock_state(state)?;
-            Ok((action_response(service, action, &format!("<CurrentTransportState>{}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>", state.transport.upnp_value())), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!(
+                        "<CurrentTransportState>{}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
+                        state.transport.upnp_value()
+                    ),
+                ),
+                false,
+            ))
         }
         (EventService::AvTransport, "GetPositionInfo") => {
             require_instance_zero(request)?;
@@ -266,30 +306,70 @@ fn execute_action(
             let state = lock_state(state)?;
             let duration = format_upnp_time(state.duration.unwrap_or_default());
             let position = format_upnp_time(state.position);
-            Ok((action_response(service, action, &format!("<Track>1</Track><TrackDuration>{duration}</TrackDuration><TrackMetaData></TrackMetaData><TrackURI>{}</TrackURI><RelTime>{position}</RelTime><AbsTime>{position}</AbsTime><RelCount>2147483647</RelCount><AbsCount>2147483647</AbsCount>", escape_xml(state.uri.as_deref().unwrap_or_default()))), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!(
+                        "<Track>1</Track><TrackDuration>{duration}</TrackDuration><TrackMetaData></TrackMetaData><TrackURI>{}</TrackURI><RelTime>{position}</RelTime><AbsTime>{position}</AbsTime><RelCount>2147483647</RelCount><AbsCount>2147483647</AbsCount>",
+                        escape_xml(state.uri.as_deref().unwrap_or_default())
+                    ),
+                ),
+                false,
+            ))
         }
         (EventService::AvTransport, "GetMediaInfo") => {
             require_instance_zero(request)?;
             refresh_player_state(player, state);
             let state = lock_state(state)?;
-            Ok((action_response(service, action, &format!("<NrTracks>1</NrTracks><MediaDuration>{}</MediaDuration><CurrentURI>{}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData><NextURI></NextURI><NextURIMetaData></NextURIMetaData><PlayMedium>NETWORK</PlayMedium><RecordMedium>NOT_IMPLEMENTED</RecordMedium><WriteStatus>NOT_IMPLEMENTED</WriteStatus>", format_upnp_time(state.duration.unwrap_or_default()), escape_xml(state.uri.as_deref().unwrap_or_default()))), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!(
+                        "<NrTracks>1</NrTracks><MediaDuration>{}</MediaDuration><CurrentURI>{}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData><NextURI></NextURI><NextURIMetaData></NextURIMetaData><PlayMedium>NETWORK</PlayMedium><RecordMedium>NOT_IMPLEMENTED</RecordMedium><WriteStatus>NOT_IMPLEMENTED</WriteStatus>",
+                        format_upnp_time(state.duration.unwrap_or_default()),
+                        escape_xml(state.uri.as_deref().unwrap_or_default())
+                    ),
+                ),
+                false,
+            ))
         }
         (EventService::AvTransport, "GetTransportSettings") => {
             require_instance_zero(request)?;
-            Ok((action_response(service, action, "<PlayMode>NORMAL</PlayMode><RecQualityMode>NOT_IMPLEMENTED</RecQualityMode>"), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    "<PlayMode>NORMAL</PlayMode><RecQualityMode>NOT_IMPLEMENTED</RecQualityMode>",
+                ),
+                false,
+            ))
         }
         (EventService::RenderingControl, "GetVolume") => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
             refresh_player_state(player, state);
             let volume = lock_state(state)?.volume;
-            Ok((action_response(service, action, &format!("<CurrentVolume>{volume}</CurrentVolume>")), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!("<CurrentVolume>{volume}</CurrentVolume>"),
+                ),
+                false,
+            ))
         }
         (EventService::RenderingControl, "SetVolume") => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
-            let volume = required_value(&request.body, "DesiredVolume")?.parse::<u8>().map_err(|_| UpnpError::new(402, "Invalid Args"))?.min(100);
-            lock_player(player)?.set_volume(volume).map_err(player_error)?;
+            let volume = required_value(&request.body, "DesiredVolume")?
+                .parse::<u8>()
+                .map_err(|_| UpnpError::new(402, "Invalid Args"))?
+                .min(100);
+            lock_player(player)?
+                .set_volume(volume)
+                .map_err(player_error)?;
             lock_state(state)?.volume = volume;
             Ok((action_response(service, action, ""), true))
         }
@@ -298,7 +378,14 @@ fn execute_action(
             require_master_channel(request)?;
             refresh_player_state(player, state);
             let muted = u8::from(lock_state(state)?.muted);
-            Ok((action_response(service, action, &format!("<CurrentMute>{muted}</CurrentMute>")), false))
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!("<CurrentMute>{muted}</CurrentMute>"),
+                ),
+                false,
+            ))
         }
         (EventService::RenderingControl, "SetMute") => {
             require_instance_zero(request)?;
@@ -322,7 +409,9 @@ fn subscribe(
     if let Some(sid) = request.headers.get("sid") {
         let mut guard = match subscriptions.lock() {
             Ok(guard) => guard,
-            Err(_) => return plain_response("500 Internal Server Error", "subscription state failed\n"),
+            Err(_) => {
+                return plain_response("500 Internal Server Error", "subscription state failed\n");
+            }
         };
         let Some(subscription) = guard.get_mut(sid) else {
             return plain_response("412 Precondition Failed", "unknown SID\n");
@@ -334,11 +423,19 @@ fn subscribe(
     if request.headers.get("nt").map(String::as_str) != Some("upnp:event") {
         return plain_response("412 Precondition Failed", "NT must be upnp:event\n");
     }
-    let Some(callback) = request.headers.get("callback").and_then(|value| value.trim().strip_prefix('<')).and_then(|value| value.strip_suffix('>')) else {
+    let Some(callback) = request
+        .headers
+        .get("callback")
+        .and_then(|value| value.trim().strip_prefix('<'))
+        .and_then(|value| value.strip_suffix('>'))
+    else {
         return plain_response("412 Precondition Failed", "CALLBACK is required\n");
     };
     if !callback.starts_with("http://") {
-        return plain_response("412 Precondition Failed", "only HTTP callbacks are supported\n");
+        return plain_response(
+            "412 Precondition Failed",
+            "only HTTP callbacks are supported\n",
+        );
     }
     let sid = new_sid();
     let subscription = Subscription {
@@ -361,25 +458,52 @@ fn unsubscribe(request: &HttpRequest, subscriptions: &SharedSubscriptions) -> Ht
         return plain_response("412 Precondition Failed", "SID is required\n");
     };
     match subscriptions.lock() {
-        Ok(mut guard) if guard.remove(sid).is_some() => HttpResponse { status: "200 OK", content_type: "text/plain", headers: Vec::new(), body: String::new() },
+        Ok(mut guard) if guard.remove(sid).is_some() => HttpResponse {
+            status: "200 OK",
+            content_type: "text/plain",
+            headers: Vec::new(),
+            body: String::new(),
+        },
         Ok(_) => plain_response("412 Precondition Failed", "unknown SID\n"),
         Err(_) => plain_response("500 Internal Server Error", "subscription state failed\n"),
     }
 }
 
-fn notify_subscribers(subscriptions: &SharedSubscriptions, state: &SharedState, service: EventService) {
-    let sids = subscriptions.lock().map(|guard| guard.iter().filter(|(_, sub)| sub.service == service).map(|(sid, _)| sid.clone()).collect::<Vec<_>>()).unwrap_or_default();
-    for sid in sids { notify_sid(subscriptions, state, &sid); }
+fn notify_subscribers(
+    subscriptions: &SharedSubscriptions,
+    state: &SharedState,
+    service: EventService,
+) {
+    let sids = subscriptions
+        .lock()
+        .map(|guard| {
+            guard
+                .iter()
+                .filter(|(_, sub)| sub.service == service)
+                .map(|(sid, _)| sid.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    for sid in sids {
+        notify_sid(subscriptions, state, &sid);
+    }
 }
 
 fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &str) {
-    let state = match state.lock() { Ok(state) => state.clone(), Err(_) => return };
+    let state = match state.lock() {
+        Ok(state) => state.clone(),
+        Err(_) => return,
+    };
     let (callback, sequence, service) = match subscriptions.lock() {
         Ok(mut guard) => match guard.get_mut(sid) {
             Some(subscription) => {
                 let sequence = subscription.sequence;
                 subscription.sequence = subscription.sequence.wrapping_add(1);
-                (subscription.callback.clone(), sequence, subscription.service)
+                (
+                    subscription.callback.clone(),
+                    sequence,
+                    subscription.service,
+                )
             }
             None => return,
         },
@@ -395,18 +519,48 @@ fn send_notify(callback: &str, sid: &str, sequence: u32, body: &str) -> Result<(
     let target = parse_http_url(callback)?;
     let mut stream = TcpStream::connect_timeout(&target.address, Duration::from_secs(2))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-    write!(stream, "NOTIFY {} HTTP/1.1\r\nHOST: {}\r\nCONTENT-TYPE: text/xml; charset=utf-8\r\nNT: upnp:event\r\nNTS: upnp:propchange\r\nSID: {sid}\r\nSEQ: {sequence}\r\nCONTENT-LENGTH: {}\r\nCONNECTION: close\r\n\r\n{body}", target.path, target.host_header, body.len())?;
+    write!(
+        stream,
+        "NOTIFY {} HTTP/1.1\r\nHOST: {}\r\nCONTENT-TYPE: text/xml; charset=utf-8\r\nNT: upnp:event\r\nNTS: upnp:propchange\r\nSID: {sid}\r\nSEQ: {sequence}\r\nCONTENT-LENGTH: {}\r\nCONNECTION: close\r\n\r\n{body}",
+        target.path,
+        target.host_header,
+        body.len()
+    )?;
     Ok(())
 }
 
-struct HttpTarget { address: SocketAddr, host_header: String, path: String }
+struct HttpTarget {
+    address: SocketAddr,
+    host_header: String,
+    path: String,
+}
 
 fn parse_http_url(url: &str) -> Result<HttpTarget> {
-    let remainder = url.strip_prefix("http://").context("callback is not HTTP")?;
-    let (authority, path) = remainder.split_once('/').map(|(authority, path)| (authority, format!("/{path}"))).unwrap_or((remainder, "/".into()));
-    let socket_authority = if authority.rsplit_once(':').is_some_and(|(_, port)| port.parse::<u16>().is_ok()) { authority.to_owned() } else { format!("{authority}:80") };
-    let address = socket_authority.to_socket_addrs().context("resolving callback host")?.next().context("callback host has no address")?;
-    Ok(HttpTarget { address, host_header: authority.into(), path })
+    let remainder = url
+        .strip_prefix("http://")
+        .context("callback is not HTTP")?;
+    let (authority, path) = remainder
+        .split_once('/')
+        .map(|(authority, path)| (authority, format!("/{path}")))
+        .unwrap_or((remainder, "/".into()));
+    let socket_authority = if authority
+        .rsplit_once(':')
+        .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
+    {
+        authority.to_owned()
+    } else {
+        format!("{authority}:80")
+    };
+    let address = socket_authority
+        .to_socket_addrs()
+        .context("resolving callback host")?
+        .next()
+        .context("callback host has no address")?;
+    Ok(HttpTarget {
+        address,
+        host_header: authority.into(),
+        path,
+    })
 }
 
 fn event_body(service: EventService, state: &RendererState) -> String {
@@ -419,7 +573,10 @@ fn event_body(service: EventService, state: &RendererState) -> String {
                 format_upnp_time(state.position),
                 format_upnp_time(state.duration.unwrap_or_default()),
             );
-            format!("<e:property><LastChange>{}</LastChange></e:property>", escape_xml(&last_change))
+            format!(
+                "<e:property><LastChange>{}</LastChange></e:property>",
+                escape_xml(&last_change)
+            )
         }
         EventService::RenderingControl => {
             let last_change = format!(
@@ -427,14 +584,19 @@ fn event_body(service: EventService, state: &RendererState) -> String {
                 state.volume,
                 u8::from(state.muted),
             );
-            format!("<e:property><LastChange>{}</LastChange></e:property>", escape_xml(&last_change))
+            format!(
+                "<e:property><LastChange>{}</LastChange></e:property>",
+                escape_xml(&last_change)
+            )
         }
         EventService::ConnectionManager => format!(
             "<e:property><SourceProtocolInfo></SourceProtocolInfo></e:property><e:property><SinkProtocolInfo>{}</SinkProtocolInfo></e:property><e:property><CurrentConnectionIDs>0</CurrentConnectionIDs></e:property>",
             escape_xml(SINK_PROTOCOL_INFO)
         ),
     };
-    format!("<?xml version=\"1.0\"?><e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\">{properties}</e:propertyset>")
+    format!(
+        "<?xml version=\"1.0\"?><e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\">{properties}</e:propertyset>"
+    )
 }
 
 fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
@@ -443,46 +605,111 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
     let mut content_length = None;
     loop {
         let size = stream.read(&mut chunk)?;
-        if size == 0 { break; }
+        if size == 0 {
+            break;
+        }
         data.extend_from_slice(&chunk[..size]);
-        if data.len() > MAX_REQUEST_SIZE { anyhow::bail!("UPnP request exceeds 1 MiB"); }
+        if data.len() > MAX_REQUEST_SIZE {
+            anyhow::bail!("UPnP request exceeds 1 MiB");
+        }
         if let Some(header_end) = find_bytes(&data, b"\r\n\r\n") {
             let headers = String::from_utf8_lossy(&data[..header_end]);
-            content_length.get_or_insert_with(|| header_value(&headers, "content-length").and_then(|value| value.parse().ok()).unwrap_or(0));
-            if data.len() >= header_end + 4 + content_length.unwrap_or(0) { break; }
+            content_length.get_or_insert_with(|| {
+                header_value(&headers, "content-length")
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0)
+            });
+            if data.len() >= header_end + 4 + content_length.unwrap_or(0) {
+                break;
+            }
         }
     }
     let header_end = find_bytes(&data, b"\r\n\r\n").context("incomplete HTTP headers")?;
-    let headers_text = std::str::from_utf8(&data[..header_end]).context("HTTP headers are not UTF-8")?;
+    let headers_text =
+        std::str::from_utf8(&data[..header_end]).context("HTTP headers are not UTF-8")?;
     let mut lines = headers_text.lines();
     let mut request_line = lines.next().unwrap_or_default().split_whitespace();
     let method = request_line.next().unwrap_or_default().to_owned();
-    let path = request_line.next().unwrap_or_default().split('?').next().unwrap_or_default().to_owned();
-    let headers = lines.filter_map(|line| line.split_once(':')).map(|(name, value)| (name.trim().to_ascii_lowercase(), value.trim().to_owned())).collect();
-    let body = String::from_utf8(data[header_end + 4..].to_vec()).context("HTTP body is not UTF-8")?;
-    Ok(HttpRequest { method, path, headers, body })
+    let path = request_line
+        .next()
+        .unwrap_or_default()
+        .split('?')
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    let headers = lines
+        .filter_map(|line| line.split_once(':'))
+        .map(|(name, value)| (name.trim().to_ascii_lowercase(), value.trim().to_owned()))
+        .collect();
+    let body =
+        String::from_utf8(data[header_end + 4..].to_vec()).context("HTTP body is not UTF-8")?;
+    Ok(HttpRequest {
+        method,
+        path,
+        headers,
+        body,
+    })
 }
 
 fn write_response(stream: &mut TcpStream, response: HttpResponse) -> Result<()> {
-    write!(stream, "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n", response.status, response.content_type, response.body.len())?;
-    for (name, value) in response.headers { write!(stream, "{name}: {value}\r\n")?; }
+    write!(
+        stream,
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        response.status,
+        response.content_type,
+        response.body.len()
+    )?;
+    for (name, value) in response.headers {
+        write!(stream, "{name}: {value}\r\n")?;
+    }
     write!(stream, "\r\n{}", response.body)?;
     Ok(())
 }
 
-fn xml_response(body: String) -> HttpResponse { HttpResponse { status: "200 OK", content_type: "text/xml; charset=utf-8", headers: Vec::new(), body } }
-fn plain_response(status: &'static str, body: &str) -> HttpResponse { HttpResponse { status, content_type: "text/plain; charset=utf-8", headers: Vec::new(), body: body.into() } }
-fn device_xml(name: &str) -> String { DEVICE_DESCRIPTION.replace("{{DEVICE_NAME}}", &escape_xml(name)) }
-
-fn action_response(service: EventService, action: &str, values: &str) -> String {
-    format!("<u:{action}Response xmlns:u=\"{}\">{values}</u:{action}Response>", service.urn())
+fn xml_response(body: String) -> HttpResponse {
+    HttpResponse {
+        status: "200 OK",
+        content_type: "text/xml; charset=utf-8",
+        headers: Vec::new(),
+        body,
+    }
+}
+fn plain_response(status: &'static str, body: &str) -> HttpResponse {
+    HttpResponse {
+        status,
+        content_type: "text/plain; charset=utf-8",
+        headers: Vec::new(),
+        body: body.into(),
+    }
+}
+fn device_xml(name: &str) -> String {
+    DEVICE_DESCRIPTION.replace("{{DEVICE_NAME}}", &escape_xml(name))
 }
 
-fn soap_envelope(body: &str) -> String { format!("<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>{body}</s:Body></s:Envelope>") }
+fn action_response(service: EventService, action: &str, values: &str) -> String {
+    format!(
+        "<u:{action}Response xmlns:u=\"{}\">{values}</u:{action}Response>",
+        service.urn()
+    )
+}
+
+fn soap_envelope(body: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>{body}</s:Body></s:Envelope>"
+    )
+}
 
 fn soap_fault_response(code: u16, description: &str) -> HttpResponse {
-    let fault = format!("<s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns=\"urn:schemas-upnp-org:control-1-0\"><errorCode>{code}</errorCode><errorDescription>{}</errorDescription></UPnPError></detail></s:Fault>", escape_xml(description));
-    HttpResponse { status: "500 Internal Server Error", content_type: "text/xml; charset=utf-8", headers: Vec::new(), body: soap_envelope(&fault) }
+    let fault = format!(
+        "<s:Fault><faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail><UPnPError xmlns=\"urn:schemas-upnp-org:control-1-0\"><errorCode>{code}</errorCode><errorDescription>{}</errorDescription></UPnPError></detail></s:Fault>",
+        escape_xml(description)
+    );
+    HttpResponse {
+        status: "500 Internal Server Error",
+        content_type: "text/xml; charset=utf-8",
+        headers: Vec::new(),
+        body: soap_envelope(&fault),
+    }
 }
 
 impl EventService {
@@ -504,31 +731,71 @@ fn event_service(path: &str) -> Option<EventService> {
     }
 }
 
-struct UpnpError { code: u16, description: &'static str }
-impl UpnpError { fn new(code: u16, description: &'static str) -> Self { Self { code, description } } }
-fn player_error(error: anyhow::Error) -> UpnpError { eprintln!("player action failed: {error:#}"); UpnpError::new(501, "Action Failed") }
-fn lock_player(player: &SharedPlayer) -> std::result::Result<std::sync::MutexGuard<'_, Box<dyn PlayerBackend>>, UpnpError> { player.lock().map_err(|_| UpnpError::new(501, "Action Failed")) }
-fn lock_state(state: &SharedState) -> std::result::Result<std::sync::MutexGuard<'_, RendererState>, UpnpError> { state.lock().map_err(|_| UpnpError::new(501, "Action Failed")) }
+struct UpnpError {
+    code: u16,
+    description: &'static str,
+}
+impl UpnpError {
+    fn new(code: u16, description: &'static str) -> Self {
+        Self { code, description }
+    }
+}
+fn player_error(error: anyhow::Error) -> UpnpError {
+    eprintln!("player action failed: {error:#}");
+    UpnpError::new(501, "Action Failed")
+}
+fn lock_player(
+    player: &SharedPlayer,
+) -> std::result::Result<std::sync::MutexGuard<'_, Box<dyn PlayerBackend>>, UpnpError> {
+    player
+        .lock()
+        .map_err(|_| UpnpError::new(501, "Action Failed"))
+}
+fn lock_state(
+    state: &SharedState,
+) -> std::result::Result<std::sync::MutexGuard<'_, RendererState>, UpnpError> {
+    state
+        .lock()
+        .map_err(|_| UpnpError::new(501, "Action Failed"))
+}
 
 fn refresh_player_state(player: &SharedPlayer, state: &SharedState) {
-    let status = player.lock().ok().and_then(|mut player| player.status().map_err(|error| eprintln!("reading player status: {error:#}")).ok());
+    let status = player.lock().ok().and_then(|mut player| {
+        player
+            .status()
+            .map_err(|error| eprintln!("reading player status: {error:#}"))
+            .ok()
+    });
     if let (Some(status), Ok(mut state)) = (status, state.lock()) {
         state.position = status.position;
         state.duration = status.duration;
         state.volume = status.volume;
         state.muted = status.muted;
-        if status.playing { state.transport = TransportState::Playing; }
-        else if status.paused { state.transport = TransportState::PausedPlayback; }
+        if status.playing {
+            state.transport = TransportState::Playing;
+        } else if status.paused {
+            state.transport = TransportState::PausedPlayback;
+        }
     }
 }
 
 fn require_instance_zero(request: &HttpRequest) -> std::result::Result<(), UpnpError> {
-    if required_value(&request.body, "InstanceID")? == "0" { Ok(()) } else { Err(UpnpError::new(718, "Invalid InstanceID")) }
+    if required_value(&request.body, "InstanceID")? == "0" {
+        Ok(())
+    } else {
+        Err(UpnpError::new(718, "Invalid InstanceID"))
+    }
 }
 fn require_master_channel(request: &HttpRequest) -> std::result::Result<(), UpnpError> {
-    if required_value(&request.body, "Channel")? == "Master" { Ok(()) } else { Err(UpnpError::new(402, "Invalid Args")) }
+    if required_value(&request.body, "Channel")? == "Master" {
+        Ok(())
+    } else {
+        Err(UpnpError::new(402, "Invalid Args"))
+    }
 }
-fn required_value(body: &str, tag: &str) -> std::result::Result<String, UpnpError> { xml_value(body, tag).ok_or_else(|| UpnpError::new(402, "Invalid Args")) }
+fn required_value(body: &str, tag: &str) -> std::result::Result<String, UpnpError> {
+    xml_value(body, tag).ok_or_else(|| UpnpError::new(402, "Invalid Args"))
+}
 
 fn xml_value(body: &str, tag: &str) -> Option<String> {
     let opening = format!("<{tag}");
@@ -549,33 +816,109 @@ fn xml_value(body: &str, tag: &str) -> Option<String> {
     None
 }
 
-fn parse_bool(value: &str) -> std::result::Result<bool, UpnpError> { match value { "0" | "false" => Ok(false), "1" | "true" => Ok(true), _ => Err(UpnpError::new(402, "Invalid Args")) } }
+fn parse_bool(value: &str) -> std::result::Result<bool, UpnpError> {
+    match value {
+        "0" | "false" => Ok(false),
+        "1" | "true" => Ok(true),
+        _ => Err(UpnpError::new(402, "Invalid Args")),
+    }
+}
 
 fn parse_upnp_time(value: &str) -> std::result::Result<Duration, UpnpError> {
     let parts = value.split(':').collect::<Vec<_>>();
-    if parts.len() != 3 { return Err(UpnpError::new(402, "Invalid Args")); }
-    let hours = parts[0].parse::<u64>().map_err(|_| UpnpError::new(402, "Invalid Args"))?;
-    let minutes = parts[1].parse::<u64>().map_err(|_| UpnpError::new(402, "Invalid Args"))?;
-    let seconds = parts[2].parse::<f64>().map_err(|_| UpnpError::new(402, "Invalid Args"))?;
-    if minutes >= 60 || !(0.0..60.0).contains(&seconds) { return Err(UpnpError::new(402, "Invalid Args")); }
+    if parts.len() != 3 {
+        return Err(UpnpError::new(402, "Invalid Args"));
+    }
+    let hours = parts[0]
+        .parse::<u64>()
+        .map_err(|_| UpnpError::new(402, "Invalid Args"))?;
+    let minutes = parts[1]
+        .parse::<u64>()
+        .map_err(|_| UpnpError::new(402, "Invalid Args"))?;
+    let seconds = parts[2]
+        .parse::<f64>()
+        .map_err(|_| UpnpError::new(402, "Invalid Args"))?;
+    if minutes >= 60 || !(0.0..60.0).contains(&seconds) {
+        return Err(UpnpError::new(402, "Invalid Args"));
+    }
     Ok(Duration::from_secs(hours * 3600 + minutes * 60) + Duration::from_secs_f64(seconds))
 }
 
-fn format_upnp_time(value: Duration) -> String { let total = value.as_secs(); format!("{:02}:{:02}:{:02}", total / 3600, total % 3600 / 60, total % 60) }
-fn parse_timeout(value: Option<&str>) -> Duration { value.and_then(|value| value.strip_prefix("Second-")).and_then(|value| value.parse::<u64>().ok()).map(|seconds| Duration::from_secs(seconds.clamp(60, 86400))).unwrap_or(Duration::from_secs(1800)) }
-fn subscription_response(sid: &str, timeout: Duration) -> HttpResponse { HttpResponse { status: "200 OK", content_type: "text/plain", headers: vec![("SID".into(), sid.into()), ("TIMEOUT".into(), format!("Second-{}", timeout.as_secs()))], body: String::new() } }
-fn new_sid() -> String { let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(); format!("uuid:mini-mdr-{}-{now}", std::process::id()) }
-fn remove_expired_subscriptions(subscriptions: &SharedSubscriptions) { if let Ok(mut guard) = subscriptions.lock() { let now = Instant::now(); guard.retain(|_, subscription| subscription.expires_at > now); } }
-fn header_value<'a>(headers: &'a str, target: &str) -> Option<&'a str> { headers.lines().find_map(|line| { let (name, value) = line.split_once(':')?; name.eq_ignore_ascii_case(target).then(|| value.trim()) }) }
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> { haystack.windows(needle.len()).position(|window| window == needle) }
-fn escape_xml(value: &str) -> String { value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;") }
-fn decode_xml(value: &str) -> String { value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&") }
+fn format_upnp_time(value: Duration) -> String {
+    let total = value.as_secs();
+    format!(
+        "{:02}:{:02}:{:02}",
+        total / 3600,
+        total % 3600 / 60,
+        total % 60
+    )
+}
+fn parse_timeout(value: Option<&str>) -> Duration {
+    value
+        .and_then(|value| value.strip_prefix("Second-"))
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|seconds| Duration::from_secs(seconds.clamp(60, 86400)))
+        .unwrap_or(Duration::from_secs(1800))
+}
+fn subscription_response(sid: &str, timeout: Duration) -> HttpResponse {
+    HttpResponse {
+        status: "200 OK",
+        content_type: "text/plain",
+        headers: vec![
+            ("SID".into(), sid.into()),
+            ("TIMEOUT".into(), format!("Second-{}", timeout.as_secs())),
+        ],
+        body: String::new(),
+    }
+}
+fn new_sid() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("uuid:mini-mdr-{}-{now}", std::process::id())
+}
+fn remove_expired_subscriptions(subscriptions: &SharedSubscriptions) {
+    if let Ok(mut guard) = subscriptions.lock() {
+        let now = Instant::now();
+        guard.retain(|_, subscription| subscription.expires_at > now);
+    }
+}
+fn header_value<'a>(headers: &'a str, target: &str) -> Option<&'a str> {
+    headers.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.eq_ignore_ascii_case(target).then(|| value.trim())
+    })
+}
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+fn decode_xml(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+}
 
 impl Drop for UpnpServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
         if let Some(thread) = self.thread.take() {
-            if let Err(error) = thread.join() { eprintln!("UPnP thread panicked: {error:?}"); }
+            if let Err(error) = thread.join() {
+                eprintln!("UPnP thread panicked: {error:?}");
+            }
         }
     }
 }
@@ -605,7 +948,10 @@ mod tests {
     fn matches_exact_tag_boundaries() {
         let body = "<TrackDuration>00:01:00</TrackDuration><Track>1</Track>";
         assert_eq!(xml_value(body, "Track").as_deref(), Some("1"));
-        assert_eq!(xml_value(body, "TrackDuration").as_deref(), Some("00:01:00"));
+        assert_eq!(
+            xml_value(body, "TrackDuration").as_deref(),
+            Some("00:01:00")
+        );
         assert_eq!(xml_value(body, "TrackURI"), None);
     }
 
@@ -618,7 +964,10 @@ mod tests {
     #[test]
     fn clamps_subscription_timeouts() {
         assert_eq!(parse_timeout(Some("Second-1")), Duration::from_secs(60));
-        assert_eq!(parse_timeout(Some("Second-999999")), Duration::from_secs(86400));
+        assert_eq!(
+            parse_timeout(Some("Second-999999")),
+            Duration::from_secs(86400)
+        );
         assert_eq!(parse_timeout(None), Duration::from_secs(1800));
     }
 }

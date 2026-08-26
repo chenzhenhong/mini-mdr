@@ -1,16 +1,28 @@
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CastState { Stopped, Running }
+pub enum CastState {
+    Stopped,
+    Running,
+}
 
 impl CastState {
     pub fn as_str(self) -> &'static str {
-        match self { Self::Stopped => "已停止", Self::Running => "运行中" }
+        match self {
+            Self::Stopped => "已停止",
+            Self::Running => "运行中",
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TransportState { NoMediaPresent, Stopped, Playing, PausedPlayback, Transitioning }
+pub enum TransportState {
+    NoMediaPresent,
+    Stopped,
+    Playing,
+    PausedPlayback,
+    Transitioning,
+}
 
 impl TransportState {
     pub fn as_str(self) -> &'static str {
@@ -48,6 +60,15 @@ pub struct RendererState {
 
 impl Default for RendererState {
     fn default() -> Self {
-        Self { cast: CastState::Stopped, uri: None, title: None, transport: TransportState::NoMediaPresent, duration: None, position: Duration::ZERO, volume: 100, muted: false }
+        Self {
+            cast: CastState::Stopped,
+            uri: None,
+            title: None,
+            transport: TransportState::NoMediaPresent,
+            duration: None,
+            position: Duration::ZERO,
+            volume: 100,
+            muted: false,
+        }
     }
 }
