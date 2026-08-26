@@ -180,9 +180,18 @@ fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
 }
 
 fn update_config(config: &Arc<Mutex<Config>>, fields: &HashMap<String, String>) -> Result<()> {
-    let name = fields.get("device_name").map(str::trim).unwrap_or_default();
-    let backend = fields.get("backend").map(str::trim).unwrap_or_default();
-    let mpv_path = fields.get("mpv_path").map(str::trim).unwrap_or_default();
+    let name = fields
+        .get("device_name")
+        .map(|value| value.trim())
+        .unwrap_or_default();
+    let backend = fields
+        .get("backend")
+        .map(|value| value.trim())
+        .unwrap_or_default();
+    let mpv_path = fields
+        .get("mpv_path")
+        .map(|value| value.trim())
+        .unwrap_or_default();
     if name.is_empty() || name.len() > 128 {
         anyhow::bail!("设备名称必须为 1 到 128 个字符");
     }
