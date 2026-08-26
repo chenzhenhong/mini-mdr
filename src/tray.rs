@@ -1,5 +1,4 @@
 use anyhow::Result;
-use image::{ImageFormat, imageops::FilterType};
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
 use std::sync::mpsc::Sender;
 
@@ -7,8 +6,9 @@ pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
 pub const QUIT: u32 = 3;
 
-const TRAY_ICON: &[u8] = include_bytes!("../resources/icon.png");
 const TRAY_ICON_SIZE: u32 = 32;
+const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
+    include_bytes!("../resources/icon.rgba");
 
 fn menu(casting: bool) -> Menu {
     Menu::new()
@@ -63,16 +63,9 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
 }
 
 fn tray_icon() -> Result<Icon> {
-    let source = image::load_from_memory_with_format(TRAY_ICON, ImageFormat::Png)?.to_rgba8();
-    let rgba = image::imageops::resize(
-        &source,
-        TRAY_ICON_SIZE,
-        TRAY_ICON_SIZE,
-        FilterType::Lanczos3,
-    );
     Ok(Icon::from_rgba(
         TRAY_ICON_SIZE,
         TRAY_ICON_SIZE,
-        rgba.into_raw(),
+        TRAY_ICON_RGBA.to_vec(),
     )?)
 }

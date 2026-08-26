@@ -91,10 +91,12 @@ explicit placeholders such as `{{DEVICE_NAME}}` and must be XML-escaped before
 replacement. Do not add runtime resource-file loading unless explicitly
 requested.
 
-The tray artwork is `resources/icon.png`. `src/tray.rs` embeds it with
-`include_bytes!`, decodes PNG only through the `image` crate, converts it to
-RGBA8, and resizes it to 32x32 for `ldtray`. Keep the source icon as PNG with a
-transparent background; do not add runtime resource lookup.
+The editable tray artwork is `resources/icon.png`, but the application embeds
+`resources/icon.rgba`: exactly 32x32 row-major, non-premultiplied RGBA8 (4096
+bytes), which is the native `ldtray::Icon` input. Regenerate it offline when the
+PNG changes; do not add runtime image decoding or resource lookup. With Pillow:
+`Image.open("resources/icon.png").convert("RGBA").resize((32, 32),
+Image.Resampling.LANCZOS).tobytes()` and write those bytes to `icon.rgba`.
 
 ## PlayerBackend Contract
 

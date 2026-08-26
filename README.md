@@ -23,7 +23,7 @@ controlled through mpv's JSON IPC interface.
   elsewhere); the mpv process starts lazily on first media load
 - System-tray-only application control with a dynamic Start/Stop Cast label
 - Lazy local settings server with an editable form that persists configuration
-- Embedded PNG tray icon, decoded and resized to 32x32 at startup
+- Embedded 32x32 RGBA8 tray icon with no runtime image decoding
 
 The tray menu contains exactly three entries:
 
@@ -156,10 +156,11 @@ Device and service descriptions are maintained as standalone files under
 `resources/` and embedded into the executable at compile time with
 `include_str!`. Deployment therefore does not require separate XML files.
 
-The tray icon source is `resources/icon.png`. It is embedded with
-`include_bytes!`, decoded as RGBA8, and resized to 32x32 before being passed to
-`ldtray`. PNG transparency is supported; the source file is not needed beside
-the installed executable.
+The editable tray artwork is `resources/icon.png`. Before committing an icon
+change, convert it offline to `resources/icon.rgba`: 32x32, row-major,
+non-premultiplied RGBA8 (4096 bytes). The executable embeds the raw bytes with
+`include_bytes!` and passes them directly to `ldtray`; no image decoder or
+startup transformation is involved.
 
 ## UPnP Scope
 
