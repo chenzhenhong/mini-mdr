@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 anyhow = "1"
 directories = "6"
+image = { version = "0.25", default-features = false, features = ["png"] }
 ldtray = "0.1.2"
 open = "5"
 serde = { version = "1", features = ["derive"] }

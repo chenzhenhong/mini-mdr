@@ -1,10 +1,14 @@
 use anyhow::Result;
+use image::{ImageFormat, imageops::FilterType};
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
 use std::sync::mpsc::Sender;
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
 pub const QUIT: u32 = 3;
+
+const TRAY_ICON: &[u8] = include_bytes!("../resources/icon.png");
+const TRAY_ICON_SIZE: u32 = 32;
 
 fn menu(casting: bool) -> Menu {
     Menu::new()
@@ -21,7 +25,7 @@ fn menu(casting: bool) -> Menu {
 }
 
 pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
-    let icon = Icon::from_rgba(16, 16, [40, 140, 220, 255].repeat(256))?;
+    let icon = tray_icon()?;
     let tray = match Tray::new(TrayConfig::new(icon).tooltip("mini-mdr").menu(menu(false))) {
         Ok(tray) => tray,
         Err(error) => {
@@ -56,4 +60,19 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
         }
     })?;
     Ok(())
+}
+
+fn tray_icon() -> Result<Icon> {
+    let source = image::load_from_memory_with_format(TRAY_ICON, ImageFormat::Png)?.to_rgba8();
+    let rgba = image::imageops::resize(
+        &source,
+        TRAY_ICON_SIZE,
+        TRAY_ICON_SIZE,
+        FilterType::Lanczos3,
+    );
+    Ok(Icon::from_rgba(
+        TRAY_ICON_SIZE,
+        TRAY_ICON_SIZE,
+        rgba.into_raw(),
+    )?)
 }

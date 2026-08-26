@@ -91,6 +91,11 @@ explicit placeholders such as `{{DEVICE_NAME}}` and must be XML-escaped before
 replacement. Do not add runtime resource-file loading unless explicitly
 requested.
 
+The tray artwork is `resources/icon.png`. `src/tray.rs` embeds it with
+`include_bytes!`, decodes PNG only through the `image` crate, converts it to
+RGBA8, and resizes it to 32x32 for `ldtray`. Keep the source icon as PNG with a
+transparent background; do not add runtime resource lookup.
+
 ## PlayerBackend Contract
 
 `src/player/mod.rs` defines the current synchronous trait:
