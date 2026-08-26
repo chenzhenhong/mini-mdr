@@ -1,5 +1,7 @@
 # mini-mdr
 
+[中文](README_zh.md)
+
 `mini-mdr` is a tray-only, cross-platform UPnP/DLNA Digital Media Renderer
 (DMR). It receives playback commands from a phone or desktop control point and
 plays audio or video through a replaceable player backend.
@@ -24,12 +26,13 @@ controlled through mpv's JSON IPC interface.
 - System-tray-only application control with a dynamic Start/Stop Cast label
 - Lazy local settings server with an editable form that persists configuration
 - Embedded 32x32 RGBA8 tray icon with no runtime image decoding
+- i18n support: English and Chinese, auto-detected from system locale
 
 The tray menu contains exactly three entries:
 
-1. `开始 Cast` / `停止 Cast` (label reflects current Cast state)
-2. `打开设置`
-3. `退出程序`
+1. `Start Cast` / `Stop Cast` (label reflects current Cast state)
+2. `Open Settings`
+3. `Quit`
 
 ## Architecture
 
@@ -87,11 +90,11 @@ server or Cast services until their corresponding menu action is selected.
 
 ### Start / Stop Cast
 
-`开始 Cast` starts the UPnP HTTP server and SSDP discovery service. It also
+`Start Cast` starts the UPnP HTTP server and SSDP discovery service. It also
 creates the configured player backend. Once running, compatible DMC clients can
 discover and control the renderer.
 
-`停止 Cast` stops the current player, releases the player backend, and stops the
+`Stop Cast` stops the current player, releases the player backend, and stops the
 Cast services. It does not stop the settings server if that server was already
 started.
 
@@ -111,7 +114,7 @@ browser. Current settings include the device name, player backend, and mpv path.
 
 ### Quit
 
-`退出程序` stops Cast services, stops the player process, closes the settings
+`Quit` stops Cast services, stops the player process, closes the settings
 server when present, and terminates the application.
 
 ## Configuration
@@ -198,8 +201,8 @@ mpv --version
 Useful manual checks:
 
 1. Start the application and confirm that no settings port is listening.
-2. Click `打开设置` and confirm a browser opens on `127.0.0.1`.
-3. Click `开始 Cast` and send an SSDP `M-SEARCH` request.
+2. Click `Open Settings` and confirm a browser opens on `127.0.0.1`.
+3. Click `Start Cast` and send an SSDP `M-SEARCH` request.
 4. Fetch the returned `device.xml` URL.
 5. Use a compatible DMC to send `SetAVTransportURI` and `Play`.
 6. Stop Cast and confirm the UPnP and SSDP services are released.

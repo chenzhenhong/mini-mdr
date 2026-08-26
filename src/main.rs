@@ -4,6 +4,7 @@
 
 mod app;
 mod config;
+mod i18n;
 mod log;
 mod player;
 mod settings_server;
@@ -17,6 +18,7 @@ use app::App;
 use config::Config;
 
 fn main() -> Result<()> {
+    i18n::detect();
     let config = Config::load()?;
     App::new(config)?.run()
 }

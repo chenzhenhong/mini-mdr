@@ -45,6 +45,13 @@ The settings server is lazy and must not start during application startup:
 The application may show an mpv video window during video playback. That does
 not violate the tray-only requirement: mini-mdr itself has no control window.
 
+All user-facing strings (tray menu labels, settings page HTML, state display
+text, validation errors) must use the `s!()` macro from `src/i18n.rs`. Call
+`i18n::detect()` once at startup (already in `main.rs`). Pass `Language` to
+functions that build user-facing text; never call `s!()` with a hardcoded
+language variant. Add new keys to both `Language::En` and `Language::Zh`
+branches of every `s!()` invocation.
+
 ## Architecture
 
 ```text
@@ -76,6 +83,8 @@ Important dependency direction:
 src/main.rs                 Entry point and module declarations
 src/app.rs                  App lifecycle and tray command handling
 src/config.rs               Config defaults, load, and save
+src/i18n.rs                 Language enum, locale detection, s!() macro
+src/log.rs                  Panic-free stderr logging for GUI subsystem
 src/state.rs                Cast and renderer state types
 src/tray.rs                 ldtray integration and three menu actions
 src/settings_server.rs      Lazy loopback settings HTTP server
@@ -213,6 +222,8 @@ new fields by using serde defaults or an explicit migration strategy.
   no console and stderr writes would fail. Never use `eprintln!`/`println!`;
   use the panic-free `crate::log_error!` / `log_warn!` / `log_info!` macros
   from `src/log.rs`.
+- All user-visible text goes through the `s!()` macro from `src/i18n.rs`.
+  Never hardcode Chinese or English strings in UI code.
 - Use `anyhow::Result` at application boundaries and preserve actionable error
   context.
 - Do not use `unwrap()` or `expect()` in production paths.

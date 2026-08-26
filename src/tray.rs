@@ -1,3 +1,4 @@
+use crate::i18n::{Language, s};
 use anyhow::Result;
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
 use std::sync::mpsc::Sender;
@@ -10,23 +11,32 @@ const TRAY_ICON_SIZE: u32 = 32;
 const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
     include_bytes!("../resources/icon.rgba");
 
-fn menu(casting: bool) -> Menu {
+fn menu(casting: bool, lang: Language) -> Menu {
+    let toggle = s!(
+        lang,
+        if casting {
+            "停止 Cast"
+        } else {
+            "开始 Cast"
+        },
+        if casting { "Stop Cast" } else { "Start Cast" }
+    );
+    let settings = s!(lang, "打开设置", "Open Settings");
+    let quit = s!(lang, "退出程序", "Quit");
     Menu::new()
-        .item(MenuItem::button(
-            TOGGLE_CAST,
-            if casting {
-                "停止 Cast"
-            } else {
-                "开始 Cast"
-            },
-        ))
-        .item(MenuItem::button(OPEN_SETTINGS, "打开设置"))
-        .item(MenuItem::button(QUIT, "退出程序"))
+        .item(MenuItem::button(TOGGLE_CAST, toggle))
+        .item(MenuItem::button(OPEN_SETTINGS, settings))
+        .item(MenuItem::button(QUIT, quit))
 }
 
 pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
     let icon = tray_icon()?;
-    let tray = match Tray::new(TrayConfig::new(icon).tooltip("mini-mdr").menu(menu(false))) {
+    let lang = crate::i18n::lang();
+    let tray = match Tray::new(
+        TrayConfig::new(icon)
+            .tooltip("mini-mdr")
+            .menu(menu(false, lang)),
+    ) {
         Ok(tray) => tray,
         Err(error) => {
             crate::log_error!("tray unavailable: {error}");
@@ -48,7 +58,7 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
             }
             if id.0 == TOGGLE_CAST {
                 casting = !casting;
-                if let Err(error) = handle.set_menu(menu(casting)) {
+                if let Err(error) = handle.set_menu(menu(casting, lang)) {
                     crate::log_error!("updating tray menu: {error}");
                 }
             }
