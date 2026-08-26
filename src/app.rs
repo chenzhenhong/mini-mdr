@@ -90,12 +90,11 @@ impl App {
     }
 
     fn stop_cast(&mut self) -> Result<()> {
-        if let Some(player) = &self.player {
-            if let Ok(mut player) = player.lock() {
-                if let Err(error) = player.stop() {
-                    eprintln!("stopping current media: {error:#}");
-                }
-            }
+        if let Some(player) = &self.player
+            && let Ok(mut player) = player.lock()
+            && let Err(error) = player.stop()
+        {
+            eprintln!("stopping current media: {error:#}");
         }
         self.cast = None;
         self.player = None;

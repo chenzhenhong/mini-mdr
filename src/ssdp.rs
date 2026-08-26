@@ -103,7 +103,7 @@ fn respond_to_search(
     } else {
         match ADVERTISED_TARGETS
             .iter()
-            .find(|target| search_target.eq_ignore_ascii_case(*target))
+            .find(|target| search_target.eq_ignore_ascii_case(target))
         {
             Some(target) => vec![*target],
             None => return,
@@ -179,10 +179,10 @@ fn local_ip() -> IpAddr {
 impl Drop for SsdpServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        if let Some(thread) = self.thread.take() {
-            if let Err(error) = thread.join() {
-                eprintln!("SSDP thread panicked: {error:?}");
-            }
+        if let Some(thread) = self.thread.take()
+            && let Err(error) = thread.join()
+        {
+            eprintln!("SSDP thread panicked: {error:?}");
         }
     }
 }

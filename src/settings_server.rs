@@ -166,15 +166,15 @@ fn parse_headers(request: &str) -> HashMap<String, String> {
 
 fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
     let expected = format!("http://{address}");
-    if let Some(origin) = headers.get("origin") {
-        if !origin.eq_ignore_ascii_case(&expected) {
-            return false;
-        }
+    if let Some(origin) = headers.get("origin")
+        && !origin.eq_ignore_ascii_case(&expected)
+    {
+        return false;
     }
-    if let Some(site) = headers.get("sec-fetch-site") {
-        if site.eq_ignore_ascii_case("cross-site") {
-            return false;
-        }
+    if let Some(site) = headers.get("sec-fetch-site")
+        && site.eq_ignore_ascii_case("cross-site")
+    {
+        return false;
     }
     true
 }
@@ -317,10 +317,10 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 impl Drop for SettingsServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        if let Some(thread) = self.thread.take() {
-            if let Err(error) = thread.join() {
-                eprintln!("settings thread panicked: {error:?}");
-            }
+        if let Some(thread) = self.thread.take()
+            && let Err(error) = thread.join()
+        {
+            eprintln!("settings thread panicked: {error:?}");
         }
     }
 }

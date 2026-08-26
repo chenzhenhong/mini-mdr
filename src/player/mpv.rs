@@ -248,19 +248,19 @@ impl MpvBackend {
 
 impl Drop for MpvSession {
     fn drop(&mut self) {
-        if let Err(error) = self.child.kill() {
-            if error.kind() != std::io::ErrorKind::InvalidInput {
-                eprintln!("stopping mpv: {error}");
-            }
+        if let Err(error) = self.child.kill()
+            && error.kind() != std::io::ErrorKind::InvalidInput
+        {
+            eprintln!("stopping mpv: {error}");
         }
         if let Err(error) = self.child.wait() {
             eprintln!("waiting for mpv: {error}");
         }
         #[cfg(unix)]
-        if let Err(error) = std::fs::remove_file(&self.socket_path) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                eprintln!("removing mpv IPC socket: {error}");
-            }
+        if let Err(error) = std::fs::remove_file(&self.socket_path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            eprintln!("removing mpv IPC socket: {error}");
         }
     }
 }

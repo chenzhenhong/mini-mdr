@@ -736,6 +736,7 @@ fn event_service(path: &str) -> Option<EventService> {
     }
 }
 
+#[derive(Debug)]
 struct UpnpError {
     code: u16,
     description: &'static str,
@@ -920,10 +921,10 @@ fn decode_xml(value: &str) -> String {
 impl Drop for UpnpServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        if let Some(thread) = self.thread.take() {
-            if let Err(error) = thread.join() {
-                eprintln!("UPnP thread panicked: {error:?}");
-            }
+        if let Some(thread) = self.thread.take()
+            && let Err(error) = thread.join()
+        {
+            eprintln!("UPnP thread panicked: {error:?}");
         }
     }
 }

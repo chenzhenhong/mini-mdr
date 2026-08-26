@@ -21,7 +21,7 @@ fn menu(casting: bool) -> Menu {
 }
 
 pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
-    let icon = Icon::from_rgba(16, 16, vec![40, 140, 220, 255].repeat(256))?;
+    let icon = Icon::from_rgba(16, 16, [40, 140, 220, 255].repeat(256))?;
     let tray = match Tray::new(TrayConfig::new(icon).tooltip("mini-mdr").menu(menu(false))) {
         Ok(tray) => tray,
         Err(error) => {
@@ -48,10 +48,10 @@ pub fn run(sender: Sender<crate::app::Command>) -> Result<()> {
                     eprintln!("updating tray menu: {error}");
                 }
             }
-            if id.0 == QUIT {
-                if let Err(error) = handle.quit() {
-                    eprintln!("stopping tray event loop: {error}");
-                }
+            if id.0 == QUIT
+                && let Err(error) = handle.quit()
+            {
+                eprintln!("stopping tray event loop: {error}");
             }
         }
     })?;
