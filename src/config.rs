@@ -28,6 +28,7 @@ pub struct PlayerConfig {
 #[serde(default)]
 pub struct SettingsConfig {
     pub port: u16,
+    pub max_history: usize,
 }
 
 impl Default for Config {
@@ -38,7 +39,7 @@ impl Default for Config {
                 backend: "mpv".into(),
                 mpv_path: "mpv".into(),
             },
-            settings: SettingsConfig { port: 7878 },
+            settings: SettingsConfig::default(),
         }
     }
 }
@@ -65,7 +66,10 @@ impl Default for PlayerConfig {
 
 impl Default for SettingsConfig {
     fn default() -> Self {
-        Self { port: 7878 }
+        Self {
+            port: 7878,
+            max_history: 200,
+        }
     }
 }
 

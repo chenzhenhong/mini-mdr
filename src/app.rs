@@ -41,6 +41,9 @@ impl App {
     }
 
     fn command_loop(mut self, receiver: mpsc::Receiver<Command>) -> Result<()> {
+        if let Err(error) = self.toggle_cast() {
+            crate::log_error!("auto-starting cast: {error:#}");
+        }
         while let Ok(command) = receiver.recv() {
             let result = match command {
                 Command::ToggleCast => self.toggle_cast(),
@@ -72,6 +75,7 @@ impl App {
             &config.device.name,
             Arc::clone(&player),
             Arc::clone(&self.state),
+            config.settings.max_history,
         )?;
         let ssdp = match crate::ssdp::SsdpServer::start(upnp.port(), &config.device.name) {
             Ok(server) => server,

@@ -1,20 +1,9 @@
-use crate::i18n::{Language, t};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CastState {
     Stopped,
     Running,
-}
-
-impl CastState {
-    pub fn as_str(self, lang: Language) -> String {
-        let key = match self {
-            Self::Stopped => "cast-stopped",
-            Self::Running => "cast-running",
-        };
-        t(lang, key)
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,17 +16,6 @@ pub enum TransportState {
 }
 
 impl TransportState {
-    pub fn as_str(self, lang: Language) -> String {
-        let key = match self {
-            Self::NoMediaPresent => "transport-no-media",
-            Self::Stopped => "transport-stopped",
-            Self::Playing => "transport-playing",
-            Self::PausedPlayback => "transport-paused",
-            Self::Transitioning => "transport-loading",
-        };
-        t(lang, key)
-    }
-
     pub fn upnp_value(self) -> &'static str {
         match self {
             Self::NoMediaPresent => "NO_MEDIA_PRESENT",
@@ -46,6 +24,39 @@ impl TransportState {
             Self::PausedPlayback => "PAUSED_PLAYBACK",
             Self::Transitioning => "TRANSITIONING",
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HistoryEntry {
+    pub timestamp: u64,
+    pub uri: String,
+    pub title: Option<String>,
+}
+
+impl HistoryEntry {
+    pub fn new(uri: String, title: Option<String>) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        Self {
+            timestamp,
+            uri,
+            title,
+        }
+    }
+
+    pub fn time_str(&self) -> String {
+        let datetime = UNIX_EPOCH + Duration::from_secs(self.timestamp);
+        let secs_since_midnight = datetime
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            % 86400;
+        let hours = secs_since_midnight / 3600;
+        let minutes = (secs_since_midnight % 3600) / 60;
+        format!("{hours:02}:{minutes:02}")
     }
 }
 
@@ -59,6 +70,7 @@ pub struct RendererState {
     pub position: Duration,
     pub volume: u8,
     pub muted: bool,
+    pub history: Vec<HistoryEntry>,
 }
 
 impl Default for RendererState {
@@ -72,6 +84,7 @@ impl Default for RendererState {
             position: Duration::ZERO,
             volume: 100,
             muted: false,
+            history: Vec::new(),
         }
     }
 }

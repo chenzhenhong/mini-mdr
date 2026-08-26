@@ -7,16 +7,17 @@ tray-quit = 退出程序
 # Settings page
 settings-title = mini-mdr 设置
 settings-subtitle = 本地 DMR 设置与运行状态
-settings-section-status = 状态
-settings-transport = 传输状态
-settings-volume = 音量
-settings-muted = （静音）
 settings-section-settings = 设置
 settings-device-name = 设备名称
 settings-player-backend = 播放器后端
 settings-mpv-path = mpv 可执行文件路径
 settings-save = 保存设置
 settings-saved = 设置已保存。设备名称和播放器设置将在下次开始 Cast 时生效。
+settings-section-history = 历史记录
+settings-history-time = 时间
+settings-history-title = 标题
+settings-history-empty = 暂无历史记录
+settings-max-history = 最大历史记录数
 
 # Validation errors
 error-save-failed = 保存失败

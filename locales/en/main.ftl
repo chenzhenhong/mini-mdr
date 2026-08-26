@@ -7,16 +7,17 @@ tray-quit = Quit
 # Settings page
 settings-title = mini-mdr Settings
 settings-subtitle = Local DMR settings and runtime status
-settings-section-status = Status
-settings-transport = Transport
-settings-volume = Volume
-settings-muted =  (muted)
 settings-section-settings = Settings
 settings-device-name = Device Name
 settings-player-backend = Player Backend
 settings-mpv-path = mpv Executable Path
 settings-save = Save Settings
 settings-saved = Settings saved. Device name and player settings take effect on the next Start Cast.
+settings-section-history = History
+settings-history-time = Time
+settings-history-title = Title
+settings-history-empty = No history yet
+settings-max-history = Max History Entries
 
 # Validation errors
 error-save-failed = Save failed

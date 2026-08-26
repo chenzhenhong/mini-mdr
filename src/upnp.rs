@@ -61,7 +61,12 @@ struct HttpResponse {
 }
 
 impl UpnpServer {
-    pub fn start(name: &str, player: SharedPlayer, state: SharedState) -> Result<Self> {
+    pub fn start(
+        name: &str,
+        player: SharedPlayer,
+        state: SharedState,
+        max_history: usize,
+    ) -> Result<Self> {
         let listener = TcpListener::bind(("0.0.0.0", 0))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
@@ -75,9 +80,14 @@ impl UpnpServer {
                 while active.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
-                            if let Err(error) =
-                                serve(&mut stream, &name, &player, &state, &subscriptions)
-                            {
+                            if let Err(error) = serve(
+                                &mut stream,
+                                &name,
+                                &player,
+                                &state,
+                                &subscriptions,
+                                max_history,
+                            ) {
                                 crate::log_error!("UPnP request failed: {error:#}");
                             }
                         }
@@ -110,10 +120,11 @@ fn serve(
     player: &SharedPlayer,
     state: &SharedState,
     subscriptions: &SharedSubscriptions,
+    max_history: usize,
 ) -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(3)))?;
     let request = read_request(stream)?;
-    let response = route(&request, name, player, state, subscriptions);
+    let response = route(&request, name, player, state, subscriptions, max_history);
     write_response(stream, response)
 }
 
@@ -123,6 +134,7 @@ fn route(
     player: &SharedPlayer,
     state: &SharedState,
     subscriptions: &SharedSubscriptions,
+    max_history: usize,
 ) -> HttpResponse {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/device.xml") => xml_response(device_xml(name)),
@@ -135,6 +147,7 @@ fn route(
             player,
             state,
             subscriptions,
+            max_history,
         ),
         ("POST", "/AVTransport/control") => soap_route(
             request,
@@ -142,6 +155,7 @@ fn route(
             player,
             state,
             subscriptions,
+            max_history,
         ),
         ("POST", "/RenderingControl/control") => soap_route(
             request,
@@ -149,6 +163,7 @@ fn route(
             player,
             state,
             subscriptions,
+            max_history,
         ),
         ("SUBSCRIBE", path) => match event_service(path) {
             Some(service) => subscribe(request, service, state, subscriptions),
@@ -168,6 +183,7 @@ fn soap_route(
     player: &SharedPlayer,
     state: &SharedState,
     subscriptions: &SharedSubscriptions,
+    max_history: usize,
 ) -> HttpResponse {
     let Some(action) = request.headers.get("soapaction").and_then(|value| {
         value
@@ -178,7 +194,7 @@ fn soap_route(
         return soap_fault_response(401, "Invalid Action");
     };
 
-    let result = execute_action(action, service, request, player, state);
+    let result = execute_action(action, service, request, player, state, max_history);
     match result {
         Ok((body, changed)) => {
             if changed {
@@ -201,6 +217,7 @@ fn execute_action(
     request: &HttpRequest,
     player: &SharedPlayer,
     state: &SharedState,
+    max_history: usize,
 ) -> std::result::Result<(String, bool), UpnpError> {
     match (service, action) {
         (EventService::ConnectionManager, "GetProtocolInfo") => Ok((
@@ -239,11 +256,18 @@ fn execute_action(
             state.transport = TransportState::Transitioning;
             let uri = decode_xml(&uri);
             player.load(&uri).map_err(player_error)?;
-            state.uri = Some(uri);
-            state.title = title.map(|value| decode_xml(&value));
+            let display_title = title.map(|value| decode_xml(&value));
+            state.uri = Some(uri.clone());
+            state.title = display_title.clone();
             state.position = Duration::ZERO;
             state.duration = None;
             state.transport = TransportState::Stopped;
+            state
+                .history
+                .push(crate::state::HistoryEntry::new(uri, display_title));
+            while state.history.len() > max_history {
+                state.history.remove(0);
+            }
             Ok((action_response(service, action, ""), true))
         }
         (EventService::AvTransport, "Play") => {

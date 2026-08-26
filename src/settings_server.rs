@@ -206,6 +206,11 @@ fn update_config(
         .get("mpv_path")
         .map(|value| value.trim())
         .unwrap_or_default();
+    let max_history = fields
+        .get("max_history")
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(200)
+        .min(10000);
     if name.is_empty() || name.len() > 128 {
         anyhow::bail!(t(lang, "error-name-length"));
     }
@@ -225,6 +230,7 @@ fn update_config(
     next.device.name = name.to_owned();
     next.player.backend = backend.to_owned();
     next.player.mpv_path = mpv_path.to_owned();
+    next.settings.max_history = max_history;
     next.save()?;
     *guard = next;
     Ok(())
@@ -273,19 +279,43 @@ fn page(
         .unwrap_or_default();
     let title = t(lang, "settings-title");
     let subtitle = t(lang, "settings-subtitle");
-    let section_status = t(lang, "settings-section-status");
-    let label_transport = t(lang, "settings-transport");
-    let label_volume = t(lang, "settings-volume");
-    let muted_label = t(lang, "settings-muted");
     let section_settings = t(lang, "settings-section-settings");
+    let section_history = t(lang, "settings-section-history");
     let label_name = t(lang, "settings-device-name");
     let label_backend = t(lang, "settings-player-backend");
     let label_mpv_path = t(lang, "settings-mpv-path");
+    let label_max_history = t(lang, "settings-max-history");
     let btn_save = t(lang, "settings-save");
-    let muted_display = if state.muted { &muted_label } else { "" };
+    let indicator_color = if state.cast == crate::state::CastState::Running {
+        "#4caf50"
+    } else {
+        "#f44336"
+    };
     let html_lang = match lang {
         Language::Zh => "zh-CN",
         Language::En => "en",
+    };
+    let history_rows = if state.history.is_empty() {
+        format!(
+            "<p class=\"empty\">{}</p>",
+            t(lang, "settings-history-empty")
+        )
+    } else {
+        let mut rows = String::new();
+        for entry in state.history.iter().rev() {
+            let display_title = entry.title.as_deref().unwrap_or(&entry.uri);
+            let time = &entry.time_str();
+            rows.push_str(&format!(
+                "<tr><td class=\"time\">{time}</td><td title=\"{}\">{}</td></tr>",
+                escape_html(&entry.uri),
+                escape_html(display_title),
+            ));
+        }
+        format!(
+            "<table class=\"history\"><thead><tr><th>{}</th><th>{}</th></tr></thead><tbody>{rows}</tbody></table>",
+            t(lang, "settings-history-time"),
+            t(lang, "settings-history-title"),
+        )
     };
     format!(
         r#"<!doctype html>
@@ -297,27 +327,29 @@ fn page(
 :root {{ color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background:#10151c; color:#e8edf3; }}
 body {{ max-width:720px; margin:0 auto; padding:48px 20px; }}
 h1 {{ font-size:32px; margin:0 0 8px; }} .sub {{ color:#8fa2b7; margin-bottom:32px; }}
+.indicator {{ display:inline-block; width:12px; height:12px; border-radius:50%; background:{indicator_color}; margin-right:8px; vertical-align:middle; }}
 .card {{ background:#18212c; border:1px solid #2b3948; border-radius:12px; padding:24px; margin:16px 0; }}
 label {{ display:block; margin:16px 0 6px; color:#b8c6d5; }} input,select {{ box-sizing:border-box; width:100%; padding:11px 12px; color:#eef4fa; background:#101720; border:1px solid #3a4b5d; border-radius:7px; }}
 button {{ margin-top:22px; padding:11px 18px; border:0; border-radius:7px; background:#42a5f5; color:#07131d; font-weight:700; cursor:pointer; }}
-.grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }} .metric {{ padding:14px; background:#101720; border-radius:8px; }} .metric b {{ display:block; margin-top:5px; }}
 .notice {{ background:#143b2c; border:1px solid #287758; padding:12px 14px; border-radius:8px; }}
+.history {{ width:100%; border-collapse:collapse; margin-top:12px; }}
+.history th,.history td {{ padding:10px 12px; text-align:left; border-bottom:1px solid #2b3948; }}
+.history th {{ color:#8fa2b7; font-weight:600; }}
+.history td {{ color:#e8edf3; }}
+.time {{ color:#8fa2b7; white-space:nowrap; width:60px; }}
+.empty {{ color:#8fa2b7; margin:12px 0; }}
 </style></head>
-<body><h1>mini-mdr</h1><p class="sub">{subtitle}</p>{message}
-<section class="card"><h2>{section_status}</h2><div class="grid">
-<div class="metric">Cast<b>{cast}</b></div><div class="metric">{label_transport}<b>{transport}</b></div><div class="metric">{label_volume}<b>{volume}%{muted}</b></div>
-</div></section>
+<body><h1><span class="indicator"></span>mini-mdr</h1><p class="sub">{subtitle}</p>{message}
 <section class="card"><h2>{section_settings}</h2><form method="post" action="/settings">
 <label for="device_name">{label_name}</label><input id="device_name" name="device_name" maxlength="128" required value="{name}">
 <label for="backend">{label_backend}</label><select id="backend" name="backend"><option value="mpv" selected>mpv</option></select>
 <label for="mpv_path">{label_mpv_path}</label><input id="mpv_path" name="mpv_path" required value="{mpv_path}">
-<button type="submit">{btn_save}</button></form></section></body></html>"#,
-        cast = escape_html(&state.cast.as_str(lang)),
-        transport = escape_html(&state.transport.as_str(lang)),
-        volume = state.volume,
-        muted = muted_display,
+<label for="max_history">{label_max_history}</label><input id="max_history" name="max_history" type="number" min="1" max="10000" required value="{max_history}">
+<button type="submit">{btn_save}</button></form></section>
+<section class="card"><h2>{section_history}</h2>{history_rows}</section></body></html>"#,
         name = escape_html(&config.device.name),
         mpv_path = escape_html(&config.player.mpv_path),
+        max_history = config.settings.max_history,
     )
 }
 
