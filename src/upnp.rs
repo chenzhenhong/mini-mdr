@@ -458,13 +458,18 @@ fn unsubscribe(request: &HttpRequest, subscriptions: &SharedSubscriptions) -> Ht
         return plain_response("412 Precondition Failed", "SID is required\n");
     };
     match subscriptions.lock() {
-        Ok(mut guard) if guard.remove(sid).is_some() => HttpResponse {
-            status: "200 OK",
-            content_type: "text/plain",
-            headers: Vec::new(),
-            body: String::new(),
-        },
-        Ok(_) => plain_response("412 Precondition Failed", "unknown SID\n"),
+        Ok(mut guard) => {
+            if guard.remove(sid).is_some() {
+                HttpResponse {
+                    status: "200 OK",
+                    content_type: "text/plain",
+                    headers: Vec::new(),
+                    body: String::new(),
+                }
+            } else {
+                plain_response("412 Precondition Failed", "unknown SID\n")
+            }
+        }
         Err(_) => plain_response("500 Internal Server Error", "subscription state failed\n"),
     }
 }
