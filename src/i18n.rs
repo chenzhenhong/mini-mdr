@@ -1,5 +1,5 @@
 use fluent::{FluentArgs, FluentBundle, FluentResource};
-use std::sync::{Mutex, OnceLock};
+use std::cell::RefCell;
 use unic_langid::LanguageIdentifier;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,19 +24,22 @@ impl Language {
     }
 }
 
-static BUNDLES: OnceLock<Mutex<Option<(Language, FluentBundle<FluentResource>)>>> = OnceLock::new();
+thread_local! {
+    static BUNDLE: RefCell<Option<(Language, FluentBundle<FluentResource>)>> = const { RefCell::new(None) };
+}
 
 fn with_bundle<T>(lang: Language, f: impl FnOnce(&FluentBundle<FluentResource>) -> T) -> T {
-    let slot = BUNDLES.get_or_init(|| Mutex::new(None));
-    let mut guard = slot.lock().expect("i18n lock poisoned");
-    if guard.as_ref().map(|(l, _)| *l) != Some(lang) {
-        let mut bundle = FluentBundle::new(vec![lang.id()]);
-        let res =
-            FluentResource::try_new(lang.ftl().to_owned()).expect("embedded .ftl is valid UTF-8");
-        bundle.add_resource(res).expect("no duplicate message IDs");
-        *guard = Some((lang, bundle));
-    }
-    f(&guard.as_ref().unwrap().1)
+    BUNDLE.with(|cell| {
+        let mut guard = cell.borrow_mut();
+        if guard.as_ref().map(|(l, _)| *l) != Some(lang) {
+            let mut bundle = FluentBundle::new(vec![lang.id()]);
+            let res = FluentResource::try_new(lang.ftl().to_owned())
+                .expect("embedded .ftl is valid UTF-8");
+            bundle.add_resource(res).expect("no duplicate message IDs");
+            *guard = Some((lang, bundle));
+        }
+        f(&guard.as_ref().unwrap().1)
+    })
 }
 
 /// Translates a Fluent message key, returning an owned String.
@@ -55,7 +58,10 @@ pub fn t_args(lang: Language, key: &str, args: &[(&str, &str)]) -> String {
             Some(p) => p,
             None => return key.to_owned(),
         };
-        let fluent_args: FluentArgs = args.iter().map(|(k, v)| (*k, (*v).into())).collect();
+        let fluent_args: FluentArgs = args
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string().into()))
+            .collect();
         let mut errors = vec![];
         bundle
             .format_pattern(pattern, Some(&fluent_args), &mut errors)
