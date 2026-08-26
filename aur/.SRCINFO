@@ -1,6 +1,6 @@
 pkgbase = mini-mdr-git
 	pkgdesc = A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend
-	pkgver = r16.2848e47
+	pkgver = r17.49fc702
 	pkgrel = 1
 	url = https://github.com/chenzhenhong/mini-mdr
 	arch = x86_64

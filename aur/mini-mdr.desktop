@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=mini-mdr
+GenericName=Media Renderer
+Comment=A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend
+Exec=mini-mdr
+Icon=mini-mdr
+Terminal=false
+Categories=AudioVideo;Audio;Video;
+Keywords=UPnP;DLNA;MediaRenderer;mpv;

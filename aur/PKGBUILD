@@ -1,6 +1,6 @@
 # Maintainer: sanne <2246467700@qq.com>
 pkgname=mini-mdr-git
-pkgver=r16.2848e47
+pkgver=r17.49fc702
 pkgrel=1
 pkgdesc='A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend'
 arch=('x86_64')
@@ -31,4 +31,6 @@ check() {
 package() {
   cd mini-mdr
   install -Dm755 target/release/mini-mdr "$pkgdir/usr/bin/mini-mdr"
+  install -Dm644 resources/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/mini-mdr.png"
+  install -Dm644 "$srcdir/mini-mdr.desktop" "$pkgdir/usr/share/applications/mini-mdr.desktop"
 }
