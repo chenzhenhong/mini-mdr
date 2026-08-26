@@ -33,9 +33,7 @@ pub struct SettingsConfig {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            device: DeviceConfig {
-                name: "mini-mdr".into(),
-            },
+            device: DeviceConfig::default(),
             player: PlayerConfig {
                 backend: "mpv".into(),
                 mpv_path: "mpv".into(),
@@ -47,8 +45,11 @@ impl Default for Config {
 
 impl Default for DeviceConfig {
     fn default() -> Self {
+        let hostname = std::env::var("HOSTNAME")
+            .or_else(|_| std::env::var("HOST"))
+            .unwrap_or_else(|_| "localhost".into());
         Self {
-            name: "mini-mdr".into(),
+            name: format!("mini-mdr({hostname})"),
         }
     }
 }
