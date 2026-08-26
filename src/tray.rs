@@ -46,7 +46,9 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
 
     let quit_flag = Arc::new(AtomicBool::new(false));
     let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag));
+    #[cfg(unix)]
     let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&quit_flag));
+    #[cfg(unix)]
     let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&quit_flag));
 
     tray.run(move |event| {
