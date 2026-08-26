@@ -7,7 +7,6 @@ before changing code.
 
 - Project name: `mini-mdr`
 - Project type: Rust binary application
-- Directory: `E:\rust_project\mini-mdr` on the development machine
 - Purpose: tray-only UPnP/DLNA Digital Media Renderer
 - Supported media: audio and video
 - Default player: external `mpv` through JSON IPC
@@ -34,13 +33,17 @@ playback toggle:
   SSDP and UPnP services.
 - Stop Cast must not stop an already-running settings server.
 
-The settings server is lazy and must not start during application startup:
+The application auto-starts cast on launch. The settings server is lazy and
+must not start during application startup:
 
 - The first Open Settings action starts it.
 - It binds to `127.0.0.1:7878` when available.
 - If the preferred port is unavailable, it chooses an ephemeral fallback port.
 - Later Open Settings actions reuse the same server.
 - It is shut down on application exit.
+
+The application handles SIGINT, SIGHUP, and SIGTERM for clean shutdown on
+Unix. On Windows, only SIGINT is handled (SIGHUP/SIGTERM are Unix-only).
 
 The application may show an mpv video window during video playback. That does
 not violate the tray-only requirement: mini-mdr itself has no control window.
@@ -71,7 +74,7 @@ Important dependency direction:
 - `app` owns lifecycle and coordinates components.
 - `upnp` owns HTTP device descriptions and SOAP dispatch.
 - `ssdp` owns UDP discovery.
-- `state` owns renderer state types.
+- `state` owns renderer state types and history entries.
 - `player` owns the backend trait and concrete player implementations.
 - UPnP service code should depend on `PlayerBackend`, not on `MpvBackend`.
 - `MpvBackend` must not know about SOAP or UPnP XML.
@@ -81,19 +84,22 @@ Important dependency direction:
 ```text
 src/main.rs                 Entry point and module declarations
 src/app.rs                  App lifecycle and tray command handling
-src/config.rs               Config defaults, load, and save
+src/config.rs               Config defaults, load, save, and history persistence
 src/i18n.rs                 Language enum, locale detection, FluentBundle wrapper
 src/log.rs                  Panic-free stderr logging for GUI subsystem
-locales/en/main.ftl         English translations (Fluent format)
-locales/zh-CN/main.ftl      Chinese translations (Fluent format)
-```
-src/state.rs                Cast and renderer state types
-src/tray.rs                 ldtray integration and three menu actions
-src/settings_server.rs      Lazy loopback settings HTTP server
+src/state.rs                Cast, transport, and renderer state types; HistoryEntry
+src/tray.rs                 ldtray integration, three menu actions, signal handling
+src/settings_server.rs      Lazy loopback settings HTTP server (settings + history UI)
 src/ssdp.rs                 SSDP multicast listener and M-SEARCH response
-src/upnp.rs                 UPnP HTTP descriptions and basic SOAP handling
+src/upnp.rs                 UPnP HTTP descriptions and SOAP handling
 src/player/mod.rs           PlayerBackend trait and backend factory
 src/player/mpv.rs           External mpv JSON IPC backend
+locales/en/main.ftl         English translations (Fluent format)
+locales/zh-CN/main.ftl      Chinese translations (Fluent format)
+resources/*.xml             UPnP device/service descriptions (embedded at compile time)
+resources/icon.png          Editable tray icon source
+resources/icon.rgba         Embedded 32x32 RGBA8 icon (4096 bytes)
+aur/                        AUR packaging files (PKGBUILD, .SRCINFO, .desktop)
 ```
 
 UPnP descriptions live in `resources/*.xml` and are embedded at compile time
@@ -202,7 +208,7 @@ Default configuration:
 
 ```toml
 [device]
-name = "mini-mdr"
+name = "mini-mdr(<hostname>)"   # hostname from $HOSTNAME or $HOST
 
 [player]
 backend = "mpv"
@@ -210,7 +216,17 @@ mpv_path = "mpv"
 
 [settings]
 port = 7878
+max_history = 200
 ```
+
+Device name includes the system hostname by default (e.g., `mini-mdr(laptop)`).
+The hostname is read from `$HOSTNAME` or `$HOST` environment variables,
+falling back to `localhost`.
+
+History is persisted to `~/.config/mini-mdr/history.json` (or platform
+equivalent via `directories::ProjectDirs`). Each entry records timestamp, URI,
+and optional title. The `max_history` setting (default 200, max 10000) controls
+how many entries are kept.
 
 Configuration is loaded through `directories::ProjectDirs`. Do not hardcode a
 platform-specific config path. Preserve existing user settings when adding
@@ -237,26 +253,19 @@ new fields by using serde defaults or an explicit migration strategy.
 - Keep the tray menu limited to the three product actions.
 - Use ASCII in source and documentation unless a user-facing localized label
   requires otherwise.
-- Use `apply_patch` for manual edits.
 
 ## Verification
 
-The local environment may not have Rust installed. Check before claiming a
-build passed:
+When a Rust toolchain is available, run:
 
 ```text
-rustup toolchain list
-cargo --version
-```
-
-When a toolchain is available, run:
-
-```text
-cargo fmt -- --check
-cargo check
-cargo test
+cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
+
+Always run `cargo fmt` before committing. CI enforces `cargo fmt --check` and
+`cargo clippy -D warnings`.
 
 Protocol verification should check:
 
@@ -286,12 +295,3 @@ Protocol verification should check:
   `TrackMetaData`).
 - `mpv` is installed on the target machine; without it, Cast still starts and
   playback actions return UPnP 501 faults.
-- The settings page currently persists device name, backend, and mpv path only;
-  it does not yet expose every config field.
-
-## Recommended Next Task
-
-Install a stable Rust MSVC toolchain and repair all compiler errors first. Then
-add integration tests around HTTP routing, SOAP action parsing, GENA
-subscription headers, and UPnP time values. After that, implement concurrent
-request serving and DIDLLite metadata before touching new features.
