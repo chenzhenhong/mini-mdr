@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,7 +28,7 @@ impl TransportState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub timestamp: u64,
     pub uri: String,

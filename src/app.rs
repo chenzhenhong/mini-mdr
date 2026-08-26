@@ -17,11 +17,15 @@ pub struct App {
 
 impl App {
     pub fn new(config: crate::config::Config) -> Result<Self> {
+        let state = crate::state::RendererState {
+            history: crate::config::Config::load_history(),
+            ..Default::default()
+        };
         Ok(Self {
             config: Arc::new(Mutex::new(config)),
             cast: None,
             settings: None,
-            state: Arc::new(Mutex::new(crate::state::RendererState::default())),
+            state: Arc::new(Mutex::new(state)),
             player: None,
         })
     }

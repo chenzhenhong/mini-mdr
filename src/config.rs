@@ -1,3 +1,4 @@
+use crate::state::HistoryEntry;
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,12 @@ impl Config {
             .context("could not determine the configuration directory")
     }
 
+    pub fn config_dir() -> Result<PathBuf> {
+        ProjectDirs::from("com", "mini-mdr", "mini-mdr")
+            .map(|dirs| dirs.config_dir().to_path_buf())
+            .context("could not determine the configuration directory")
+    }
+
     pub fn load() -> Result<Self> {
         let path = Self::path()?;
         if !path.exists() {
@@ -97,5 +104,25 @@ impl Config {
         }
         let text = toml::to_string_pretty(self).context("serializing configuration")?;
         fs::write(path, text).context("writing configuration")
+    }
+
+    pub fn load_history() -> Vec<HistoryEntry> {
+        let path = match Self::config_dir() {
+            Ok(dir) => dir.join("history.json"),
+            Err(_) => return Vec::new(),
+        };
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(_) => return Vec::new(),
+        };
+        serde_json::from_str(&text).unwrap_or_default()
+    }
+
+    pub fn save_history(history: &[HistoryEntry]) -> Result<()> {
+        let dir = Self::config_dir()?;
+        fs::create_dir_all(&dir)?;
+        let path = dir.join("history.json");
+        let text = serde_json::to_string_pretty(history).context("serializing history")?;
+        fs::write(path, text).context("writing history")
     }
 }

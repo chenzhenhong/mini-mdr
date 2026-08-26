@@ -268,6 +268,9 @@ fn execute_action(
             while state.history.len() > max_history {
                 state.history.remove(0);
             }
+            if let Err(error) = crate::config::Config::save_history(&state.history) {
+                crate::log_error!("saving history: {error:#}");
+            }
             Ok((action_response(service, action, ""), true))
         }
         (EventService::AvTransport, "Play") => {
