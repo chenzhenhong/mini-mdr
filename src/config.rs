@@ -4,7 +4,7 @@ use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub device: DeviceConfig,
@@ -30,19 +30,6 @@ pub struct PlayerConfig {
 pub struct SettingsConfig {
     pub port: u16,
     pub max_history: usize,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            device: DeviceConfig::default(),
-            player: PlayerConfig {
-                backend: "mpv".into(),
-                mpv_path: "mpv".into(),
-            },
-            settings: SettingsConfig::default(),
-        }
-    }
 }
 
 impl Default for DeviceConfig {

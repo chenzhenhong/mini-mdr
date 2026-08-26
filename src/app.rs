@@ -1,6 +1,10 @@
 use anyhow::Result;
 use std::sync::{Arc, Mutex, mpsc};
 
+fn lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>> {
+    mutex.lock().map_err(|_| anyhow::anyhow!("lock poisoned"))
+}
+
 pub enum Command {
     ToggleCast,
     OpenSettings,
@@ -67,11 +71,7 @@ impl App {
         if self.cast.is_some() {
             return self.stop_cast();
         }
-        let config = self
-            .config
-            .lock()
-            .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?
-            .clone();
+        let config = lock(&self.config)?.clone();
         let player: Arc<Mutex<Box<dyn crate::player::PlayerBackend>>> = Arc::new(Mutex::new(
             crate::player::create_backend(&config.player.backend, &config.player.mpv_path)?,
         ));
@@ -90,10 +90,7 @@ impl App {
         };
         self.player = Some(player);
         self.cast = Some((upnp, ssdp));
-        self.state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("renderer state lock poisoned"))?
-            .cast = crate::state::CastState::Running;
+        lock(&self.state)?.cast = crate::state::CastState::Running;
         Ok(())
     }
 
@@ -106,10 +103,7 @@ impl App {
         }
         self.cast = None;
         self.player = None;
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("renderer state lock poisoned"))?;
+        let mut state = lock(&self.state)?;
         state.cast = crate::state::CastState::Stopped;
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
@@ -119,11 +113,7 @@ impl App {
     fn open_settings(&mut self) -> Result<()> {
         if self.settings.is_none() {
             let config = Arc::clone(&self.config);
-            let port = config
-                .lock()
-                .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?
-                .settings
-                .port;
+            let port = lock(&config)?.settings.port;
             self.settings = Some(crate::settings_server::SettingsServer::start(
                 port,
                 config,

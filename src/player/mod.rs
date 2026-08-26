@@ -29,7 +29,7 @@ impl Default for PlayerStatus {
 }
 
 pub trait PlayerBackend: Send {
-    fn load(&mut self, uri: &str) -> Result<()>;
+    fn load(&mut self, uri: &str, title: Option<&str>) -> Result<()>;
     fn play(&mut self) -> Result<()>;
     fn pause(&mut self) -> Result<()>;
     fn stop(&mut self) -> Result<()>;

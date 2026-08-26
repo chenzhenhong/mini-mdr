@@ -162,8 +162,12 @@ impl MpvSession {
 }
 
 impl PlayerBackend for MpvBackend {
-    fn load(&mut self, uri: &str) -> Result<()> {
-        self.command(json!({"command": ["loadfile", uri, "replace"]}))?;
+    fn load(&mut self, uri: &str, title: Option<&str>) -> Result<()> {
+        let mut command = json!({"command": ["loadfile", uri, "replace"]});
+        if let Some(title) = title {
+            command["options"] = json!({"force-media-title": title});
+        }
+        self.command(command)?;
         Ok(())
     }
 

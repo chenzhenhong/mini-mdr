@@ -12,6 +12,7 @@ mod ssdp;
 mod state;
 mod tray;
 mod upnp;
+mod util;
 
 use anyhow::Result;
 use app::App;

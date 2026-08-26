@@ -49,14 +49,9 @@ impl HistoryEntry {
     }
 
     pub fn time_str(&self) -> String {
-        let datetime = UNIX_EPOCH + Duration::from_secs(self.timestamp);
-        let secs_since_midnight = datetime
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            % 86400;
-        let hours = secs_since_midnight / 3600;
-        let minutes = (secs_since_midnight % 3600) / 60;
+        let secs = self.timestamp % 86400;
+        let hours = secs / 3600;
+        let minutes = (secs % 3600) / 60;
         format!("{hours:02}:{minutes:02}")
     }
 }

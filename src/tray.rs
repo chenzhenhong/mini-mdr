@@ -18,9 +18,9 @@ fn menu(casting: bool, lang: Language) -> Menu {
     } else {
         "tray-start-cast"
     };
-    let toggle = Box::leak(t(lang, key).into_boxed_str());
-    let settings = Box::leak(t(lang, "tray-open-settings").into_boxed_str());
-    let quit = Box::leak(t(lang, "tray-quit").into_boxed_str());
+    let toggle = t(lang, key);
+    let settings = t(lang, "tray-open-settings");
+    let quit = t(lang, "tray-quit");
     Menu::new()
         .item(MenuItem::button(TOGGLE_CAST, toggle))
         .item(MenuItem::button(OPEN_SETTINGS, settings))

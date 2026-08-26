@@ -219,8 +219,24 @@ fn execute_action(
     state: &SharedState,
     max_history: usize,
 ) -> std::result::Result<(String, bool), UpnpError> {
-    match (service, action) {
-        (EventService::ConnectionManager, "GetProtocolInfo") => Ok((
+    match service {
+        EventService::ConnectionManager => execute_connection_manager(action, service, request),
+        EventService::AvTransport => {
+            execute_av_transport(action, service, request, player, state, max_history)
+        }
+        EventService::RenderingControl => {
+            execute_rendering_control(action, service, request, player, state)
+        }
+    }
+}
+
+fn execute_connection_manager(
+    action: &str,
+    service: EventService,
+    _request: &HttpRequest,
+) -> std::result::Result<(String, bool), UpnpError> {
+    match action {
+        "GetProtocolInfo" => Ok((
             action_response(
                 service,
                 action,
@@ -231,11 +247,11 @@ fn execute_action(
             ),
             false,
         )),
-        (EventService::ConnectionManager, "GetCurrentConnectionIDs") => Ok((
+        "GetCurrentConnectionIDs" => Ok((
             action_response(service, action, "<ConnectionIDs>0</ConnectionIDs>"),
             false,
         )),
-        (EventService::ConnectionManager, "GetCurrentConnectionInfo") => Ok((
+        "GetCurrentConnectionInfo" => Ok((
             action_response(
                 service,
                 action,
@@ -243,7 +259,20 @@ fn execute_action(
             ),
             false,
         )),
-        (EventService::AvTransport, "SetAVTransportURI") => {
+        _ => Err(UpnpError::new(401, "Invalid Action")),
+    }
+}
+
+fn execute_av_transport(
+    action: &str,
+    service: EventService,
+    request: &HttpRequest,
+    player: &SharedPlayer,
+    state: &SharedState,
+    max_history: usize,
+) -> std::result::Result<(String, bool), UpnpError> {
+    match action {
+        "SetAVTransportURI" => {
             require_instance_zero(request)?;
             let uri = required_value(&request.body, "CurrentURI")?;
             let metadata = xml_value(&request.body, "CurrentURIMetaData");
@@ -255,8 +284,10 @@ fn execute_action(
             let mut state = lock_state(state)?;
             state.transport = TransportState::Transitioning;
             let uri = decode_xml(&uri);
-            player.load(&uri).map_err(player_error)?;
             let display_title = title.map(|value| decode_xml(&value));
+            player
+                .load(&uri, display_title.as_deref())
+                .map_err(player_error)?;
             state.uri = Some(uri.clone());
             state.title = display_title.clone();
             state.position = Duration::ZERO;
@@ -273,7 +304,7 @@ fn execute_action(
             }
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::AvTransport, "Play") => {
+        "Play" => {
             require_instance_zero(request)?;
             let mut player = lock_player(player)?;
             let mut state = lock_state(state)?;
@@ -284,7 +315,7 @@ fn execute_action(
             state.transport = TransportState::Playing;
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::AvTransport, "Pause") => {
+        "Pause" => {
             require_instance_zero(request)?;
             if lock_state(state)?.uri.is_none() {
                 return Err(UpnpError::new(714, "No Such Resource"));
@@ -293,7 +324,7 @@ fn execute_action(
             lock_state(state)?.transport = TransportState::PausedPlayback;
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::AvTransport, "Stop") => {
+        "Stop" => {
             require_instance_zero(request)?;
             lock_player(player)?.stop().map_err(player_error)?;
             let mut state = lock_state(state)?;
@@ -301,7 +332,7 @@ fn execute_action(
             state.position = Duration::ZERO;
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::AvTransport, "Seek") => {
+        "Seek" => {
             require_instance_zero(request)?;
             if required_value(&request.body, "Unit")? != "REL_TIME" {
                 return Err(UpnpError::new(710, "Seek Mode Not Supported"));
@@ -311,7 +342,7 @@ fn execute_action(
             lock_state(state)?.position = position;
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::AvTransport, "GetTransportInfo") => {
+        "GetTransportInfo" => {
             require_instance_zero(request)?;
             refresh_player_state(player, state);
             let state = lock_state(state)?;
@@ -327,7 +358,7 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::AvTransport, "GetPositionInfo") => {
+        "GetPositionInfo" => {
             require_instance_zero(request)?;
             refresh_player_state(player, state);
             let state = lock_state(state)?;
@@ -345,7 +376,7 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::AvTransport, "GetMediaInfo") => {
+        "GetMediaInfo" => {
             require_instance_zero(request)?;
             refresh_player_state(player, state);
             let state = lock_state(state)?;
@@ -362,7 +393,7 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::AvTransport, "GetTransportSettings") => {
+        "GetTransportSettings" => {
             require_instance_zero(request)?;
             Ok((
                 action_response(
@@ -373,7 +404,19 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::RenderingControl, "GetVolume") => {
+        _ => Err(UpnpError::new(401, "Invalid Action")),
+    }
+}
+
+fn execute_rendering_control(
+    action: &str,
+    service: EventService,
+    request: &HttpRequest,
+    player: &SharedPlayer,
+    state: &SharedState,
+) -> std::result::Result<(String, bool), UpnpError> {
+    match action {
+        "GetVolume" => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
             refresh_player_state(player, state);
@@ -387,7 +430,7 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::RenderingControl, "SetVolume") => {
+        "SetVolume" => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
             let volume = required_value(&request.body, "DesiredVolume")?
@@ -400,7 +443,7 @@ fn execute_action(
             lock_state(state)?.volume = volume;
             Ok((action_response(service, action, ""), true))
         }
-        (EventService::RenderingControl, "GetMute") => {
+        "GetMute" => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
             refresh_player_state(player, state);
@@ -414,7 +457,7 @@ fn execute_action(
                 false,
             ))
         }
-        (EventService::RenderingControl, "SetMute") => {
+        "SetMute" => {
             require_instance_zero(request)?;
             require_master_channel(request)?;
             let muted = parse_bool(&required_value(&request.body, "DesiredMute")?)?;
@@ -644,7 +687,7 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
         if data.len() > MAX_REQUEST_SIZE {
             anyhow::bail!("UPnP request exceeds 1 MiB");
         }
-        if let Some(header_end) = find_bytes(&data, b"\r\n\r\n") {
+        if let Some(header_end) = crate::util::find_bytes(&data, b"\r\n\r\n") {
             let headers = String::from_utf8_lossy(&data[..header_end]);
             content_length.get_or_insert_with(|| {
                 header_value(&headers, "content-length")
@@ -656,7 +699,7 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
             }
         }
     }
-    let header_end = find_bytes(&data, b"\r\n\r\n").context("incomplete HTTP headers")?;
+    let header_end = crate::util::find_bytes(&data, b"\r\n\r\n").context("incomplete HTTP headers")?;
     let headers_text =
         std::str::from_utf8(&data[..header_end]).context("HTTP headers are not UTF-8")?;
     let mut lines = headers_text.lines();
@@ -923,11 +966,7 @@ fn header_value<'a>(headers: &'a str, target: &str) -> Option<&'a str> {
         name.eq_ignore_ascii_case(target).then(|| value.trim())
     })
 }
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
-}
+
 fn escape_xml(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -938,11 +977,11 @@ fn escape_xml(value: &str) -> String {
 }
 fn decode_xml(value: &str) -> String {
     value
+        .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
-        .replace("&amp;", "&")
 }
 
 impl Drop for UpnpServer {

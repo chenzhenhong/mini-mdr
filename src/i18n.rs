@@ -72,38 +72,32 @@ pub fn t_args(lang: Language, key: &str, args: &[(&str, &str)]) -> String {
     })
 }
 
-pub static mut LANG: Language = Language::En;
+use std::sync::OnceLock;
+
+static LANG: OnceLock<Language> = OnceLock::new();
 
 pub fn set_lang(lang: Language) {
-    unsafe { LANG = lang };
+    let _ = LANG.set(lang);
 }
 
 pub fn lang() -> Language {
-    unsafe { LANG }
+    *LANG.get().unwrap_or(&Language::En)
 }
 
 pub fn detect() {
-    let env: std::collections::HashMap<&str, String> =
-        ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
-            .iter()
-            .filter_map(|key| {
-                std::env::var(key)
-                    .ok()
-                    .filter(|v| !v.is_empty())
-                    .map(|v| (*key, v))
-            })
-            .collect();
-
     let priority = ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"];
 
     for key in priority {
-        if let Some(value) = env.get(key) {
+        if let Ok(value) = std::env::var(key) {
+            if value.is_empty() {
+                continue;
+            }
             let lower = value.to_ascii_lowercase();
             if lower.starts_with("zh") {
                 set_lang(Language::Zh);
                 return;
             }
-            if !lower.is_empty() && lower != "c" && lower != "posix" {
+            if lower != "c" && lower != "posix" {
                 set_lang(Language::En);
                 return;
             }

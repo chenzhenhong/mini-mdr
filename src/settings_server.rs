@@ -93,6 +93,12 @@ fn serve(
             "text/html; charset=utf-8",
             &page(config, state, lang, None),
         ),
+        ("GET", "/history") => respond(
+            stream,
+            "200 OK",
+            "text/html; charset=utf-8",
+            &history_section(&state.lock().map(|v| v.clone()).unwrap_or_default(), lang),
+        ),
         ("POST", "/settings") => {
             let body = request
                 .split_once("\r\n\r\n")
@@ -146,7 +152,7 @@ fn read_request(stream: &mut TcpStream) -> Result<String> {
         if data.len() > 64 * 1024 {
             anyhow::bail!("settings request exceeds 64 KiB");
         }
-        if let Some(header_end) = find_bytes(&data, b"\r\n\r\n") {
+        if let Some(header_end) = crate::util::find_bytes(&data, b"\r\n\r\n") {
             if content_length.is_none() {
                 let headers = String::from_utf8_lossy(&data[..header_end]);
                 content_length = headers.lines().find_map(|line| {
@@ -226,13 +232,11 @@ fn update_config(
     let mut guard = config
         .lock()
         .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?;
-    let mut next = guard.clone();
-    next.device.name = name.to_owned();
-    next.player.backend = backend.to_owned();
-    next.player.mpv_path = mpv_path.to_owned();
-    next.settings.max_history = max_history;
-    next.save()?;
-    *guard = next;
+    guard.device.name = name.to_owned();
+    guard.player.backend = backend.to_owned();
+    guard.player.mpv_path = mpv_path.to_owned();
+    guard.settings.max_history = max_history;
+    guard.save()?;
     Ok(())
 }
 
@@ -277,15 +281,6 @@ fn page(
     let message = message
         .map(|value| format!("<div class=\"notice\">{}</div>", escape_html(value)))
         .unwrap_or_default();
-    let title = t(lang, "settings-title");
-    let subtitle = t(lang, "settings-subtitle");
-    let section_settings = t(lang, "settings-section-settings");
-    let section_history = t(lang, "settings-section-history");
-    let label_name = t(lang, "settings-device-name");
-    let label_backend = t(lang, "settings-player-backend");
-    let label_mpv_path = t(lang, "settings-mpv-path");
-    let label_max_history = t(lang, "settings-max-history");
-    let btn_save = t(lang, "settings-save");
     let indicator_color = if state.cast == crate::state::CastState::Running {
         "#4caf50"
     } else {
@@ -295,7 +290,68 @@ fn page(
         Language::Zh => "zh-CN",
         Language::En => "en",
     };
-    let history_rows = if state.history.is_empty() {
+    format!(
+        r#"<!doctype html>
+<html lang="{html_lang}">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>{CSS}</style></head>
+<body><h1><span class="indicator" style="background:{indicator_color}"></span>mini-mdr</h1><p class="sub">{subtitle}</p>{message}
+{settings}
+<div id="history">{history}</div>
+<script>
+setInterval(function(){{
+  fetch("/history").then(function(r){{return r.text()}}).then(function(h){{
+    document.getElementById("history").innerHTML=h;
+  }})
+}},3000);
+</script></body></html>"#,
+        title = t(lang, "settings-title"),
+        subtitle = t(lang, "settings-subtitle"),
+        settings = settings_form(&config, lang),
+        history = history_section(&state, lang),
+    )
+}
+
+const CSS: &str = "\
+:root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background:#10151c; color:#e8edf3; }
+body { max-width:720px; margin:0 auto; padding:48px 20px; }
+h1 { font-size:32px; margin:0 0 8px; } .sub { color:#8fa2b7; margin-bottom:32px; }
+.indicator { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+.card { background:#18212c; border:1px solid #2b3948; border-radius:12px; padding:24px; margin:16px 0; }
+label { display:block; margin:16px 0 6px; color:#b8c6d5; } input,select { box-sizing:border-box; width:100%; padding:11px 12px; color:#eef4fa; background:#101720; border:1px solid #3a4b5d; border-radius:7px; }
+button { margin-top:22px; padding:11px 18px; border:0; border-radius:7px; background:#42a5f5; color:#07131d; font-weight:700; cursor:pointer; }
+.notice { background:#143b2c; border:1px solid #287758; padding:12px 14px; border-radius:8px; }
+.history { width:100%; border-collapse:collapse; margin-top:12px; }
+.history th,.history td { padding:10px 12px; text-align:left; border-bottom:1px solid #2b3948; }
+.history th { color:#8fa2b7; font-weight:600; }
+.history td { color:#e8edf3; }
+.time { color:#8fa2b7; white-space:nowrap; width:60px; }
+.empty { color:#8fa2b7; margin:12px 0; }";
+
+fn settings_form(config: &crate::config::Config, lang: Language) -> String {
+    let name = escape_html(&config.device.name);
+    let mpv_path = escape_html(&config.player.mpv_path);
+    let max_history = config.settings.max_history;
+    format!(
+        r#"<section class="card"><h2>{section}</h2><form method="post" action="/settings">
+<label for="device_name">{label_name}</label><input id="device_name" name="device_name" maxlength="128" required value="{name}">
+<label for="backend">{label_backend}</label><select id="backend" name="backend"><option value="mpv" selected>mpv</option></select>
+<label for="mpv_path">{label_mpv_path}</label><input id="mpv_path" name="mpv_path" required value="{mpv_path}">
+<label for="max_history">{label_max_history}</label><input id="max_history" name="max_history" type="number" min="1" max="10000" required value="{max_history}">
+<button type="submit">{btn_save}</button></form></section>"#,
+        section = t(lang, "settings-section-settings"),
+        label_name = t(lang, "settings-device-name"),
+        label_backend = t(lang, "settings-player-backend"),
+        label_mpv_path = t(lang, "settings-mpv-path"),
+        label_max_history = t(lang, "settings-max-history"),
+        btn_save = t(lang, "settings-save"),
+    )
+}
+
+fn history_section(state: &crate::state::RendererState, lang: Language) -> String {
+    let content = if state.history.is_empty() {
         format!(
             "<p class=\"empty\">{}</p>",
             t(lang, "settings-history-empty")
@@ -318,38 +374,8 @@ fn page(
         )
     };
     format!(
-        r#"<!doctype html>
-<html lang="{html_lang}">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title}</title>
-<style>
-:root {{ color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background:#10151c; color:#e8edf3; }}
-body {{ max-width:720px; margin:0 auto; padding:48px 20px; }}
-h1 {{ font-size:32px; margin:0 0 8px; }} .sub {{ color:#8fa2b7; margin-bottom:32px; }}
-.indicator {{ display:inline-block; width:12px; height:12px; border-radius:50%; background:{indicator_color}; margin-right:8px; vertical-align:middle; }}
-.card {{ background:#18212c; border:1px solid #2b3948; border-radius:12px; padding:24px; margin:16px 0; }}
-label {{ display:block; margin:16px 0 6px; color:#b8c6d5; }} input,select {{ box-sizing:border-box; width:100%; padding:11px 12px; color:#eef4fa; background:#101720; border:1px solid #3a4b5d; border-radius:7px; }}
-button {{ margin-top:22px; padding:11px 18px; border:0; border-radius:7px; background:#42a5f5; color:#07131d; font-weight:700; cursor:pointer; }}
-.notice {{ background:#143b2c; border:1px solid #287758; padding:12px 14px; border-radius:8px; }}
-.history {{ width:100%; border-collapse:collapse; margin-top:12px; }}
-.history th,.history td {{ padding:10px 12px; text-align:left; border-bottom:1px solid #2b3948; }}
-.history th {{ color:#8fa2b7; font-weight:600; }}
-.history td {{ color:#e8edf3; }}
-.time {{ color:#8fa2b7; white-space:nowrap; width:60px; }}
-.empty {{ color:#8fa2b7; margin:12px 0; }}
-</style></head>
-<body><h1><span class="indicator"></span>mini-mdr</h1><p class="sub">{subtitle}</p>{message}
-<section class="card"><h2>{section_settings}</h2><form method="post" action="/settings">
-<label for="device_name">{label_name}</label><input id="device_name" name="device_name" maxlength="128" required value="{name}">
-<label for="backend">{label_backend}</label><select id="backend" name="backend"><option value="mpv" selected>mpv</option></select>
-<label for="mpv_path">{label_mpv_path}</label><input id="mpv_path" name="mpv_path" required value="{mpv_path}">
-<label for="max_history">{label_max_history}</label><input id="max_history" name="max_history" type="number" min="1" max="10000" required value="{max_history}">
-<button type="submit">{btn_save}</button></form></section>
-<section class="card"><h2>{section_history}</h2>{history_rows}</section></body></html>"#,
-        name = escape_html(&config.device.name),
-        mpv_path = escape_html(&config.player.mpv_path),
-        max_history = config.settings.max_history,
+        r#"<section class="card"><h2>{}</h2>{content}</section>"#,
+        t(lang, "settings-section-history"),
     )
 }
 
@@ -371,11 +397,7 @@ fn escape_html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
-}
+
 
 impl Drop for SettingsServer {
     fn drop(&mut self) {
