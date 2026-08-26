@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
 license = "MIT"
+repository = "https://github.com/chenzhenhong/mini-mdr"
 
 [dependencies]
 anyhow = "1"
@@ -17,3 +18,23 @@ serde_json = "1"
 signal-hook = "0.3"
 toml = "0.8"
 unic-langid = "0.9"
+
+[package.metadata.deb]
+name = "mini-mdr"
+maintainer = "chenzhenhong <2246467700@qq.com>"
+copyright = "2024, chenzhenhong"
+license-file = ["LICENSE", "0"]
+extended-description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/mini-mdr", "usr/bin/", "755"],
+]
+depends = "libmpv2"
+
+[package.metadata.bundle]
+name = "mini-mdr"
+identifier = "com.mini-mdr.app"
+icon = "resources/icon.icns"
+category = "public.app-category.music"
+short-description = "UPnP/DLNA MediaRenderer"

@@ -46,11 +46,61 @@ jobs:
         if: runner.os == 'Windows'
         run: cp target/${{ matrix.target }}/release/mini-mdr.exe ${{ matrix.artifact }}
 
-      - name: Upload artifact
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
+
+      - name: Install cargo-deb
+        if: runner.os == 'Linux'
+        run: cargo install cargo-deb
+
+      - name: Build deb
+        if: runner.os == 'Linux'
+        run: cargo deb --no-build --target ${{ matrix.target }}
+
+      - name: Upload deb
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-mdr-linux-amd64.deb
+          path: target/${{ matrix.target }}/debian/*.deb
+
+      - name: Build dmg
+        if: runner.os == 'macOS'
+        run: |
+          APP=mini-mdr
+          BUNDLE_DIR="target/${{ matrix.target }}/release/bundle/macOS/${APP}.app"
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          mkdir -p "${BUNDLE_DIR}/Contents/MacOS" "${BUNDLE_DIR}/Contents/Resources"
+          cp "target/${{ matrix.target }}/release/${APP}" "${BUNDLE_DIR}/Contents/MacOS/${APP}"
+          cp resources/icon.png "${BUNDLE_DIR}/Contents/Resources/icon.png"
+          cat > "${BUNDLE_DIR}/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key><string>${APP}</string>
+              <key>CFBundleIdentifier</key><string>com.mini-mdr.app</string>
+              <key>CFBundleName</key><string>${APP}</string>
+              <key>CFBundleVersion</key><string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+              <key>CFBundlePackageType</key><string>APPL</string>
+              <key>CFBundleIconFile</key><string>icon</string>
+              <key>LSMinimumSystemVersion</key><string>11.0</string>
+              <key>LSUIElement</key><true/>
+          </dict>
+          </plist>
+          EOF
+          hdiutil create -volname "${APP}" -srcfolder "${BUNDLE_DIR}" -ov -format UDZO "mini-mdr-macos-amd64.dmg"
+
+      - name: Upload dmg
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-mdr-macos-amd64.dmg
+          path: mini-mdr-macos-amd64.dmg
 
   release:
     needs: build
