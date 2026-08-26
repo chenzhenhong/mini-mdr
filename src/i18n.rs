@@ -60,8 +60,10 @@ pub fn t_args(lang: Language, key: &str, args: &[(&str, &str)]) -> String {
         };
         let mut fluent_args: FluentArgs = FluentArgs::with_capacity(args.len());
         for (k, v) in args {
-            fluent_args
-                .set::<std::string::String, fluent::FluentValue>((*k).to_string(), (*v).to_string().into());
+            fluent_args.set::<std::string::String, fluent::FluentValue>(
+                (*k).to_string(),
+                (*v).to_string().into(),
+            );
         }
         let mut errors = vec![];
         bundle
