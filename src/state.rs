@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CastState {
     Stopped,
@@ -49,10 +53,46 @@ impl HistoryEntry {
     }
 
     pub fn time_str(&self) -> String {
+        let days = self.timestamp / 86400;
         let secs = self.timestamp % 86400;
         let hours = secs / 3600;
         let minutes = (secs % 3600) / 60;
-        format!("{hours:02}:{minutes:02}")
+        let seconds = secs % 60;
+        let mut y = 1970i64;
+        let mut remaining = days as i64;
+        loop {
+            let days_in_year = if is_leap(y) { 366 } else { 365 };
+            if remaining < days_in_year {
+                break;
+            }
+            remaining -= days_in_year;
+            y += 1;
+        }
+        let leap = is_leap(y);
+        let month_days: [i64; 12] = [
+            31,
+            if leap { 29 } else { 28 },
+            31,
+            30,
+            31,
+            30,
+            31,
+            31,
+            30,
+            31,
+            30,
+            31,
+        ];
+        let mut m = 1u32;
+        for &md in &month_days {
+            if remaining < md {
+                break;
+            }
+            remaining -= md;
+            m += 1;
+        }
+        let d = remaining + 1;
+        format!("{y:04}-{m:02}-{d:02} {hours:02}:{minutes:02}:{seconds:02}")
     }
 }
 

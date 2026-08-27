@@ -45,6 +45,10 @@ impl SsdpServer {
                 "http://{}:{http_port}/device.xml",
                 local_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
             );
+            if local_ip().is_none() {
+                crate::log_warn!("could not detect local IP for SSDP LOCATION, using 127.0.0.1");
+            }
+            crate::log_info!("SSDP server started, location={location}");
             announce(&socket, &location, &name, "ssdp:alive");
             let mut last_announce = Instant::now();
             let mut buffer = [0; 4096];

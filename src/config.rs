@@ -79,11 +79,14 @@ impl Config {
     pub fn load() -> Result<Self> {
         let path = Self::path()?;
         if !path.exists() {
+            crate::log_warn!("no configuration file found, using defaults");
             return Ok(Self::default());
         }
         let text =
             fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-        toml::from_str(&text).context("parsing configuration")
+        let config: Self = toml::from_str(&text).context("parsing configuration")?;
+        crate::log_info!("configuration loaded from {}", path.display());
+        Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
@@ -92,19 +95,33 @@ impl Config {
             fs::create_dir_all(parent)?;
         }
         let text = toml::to_string_pretty(self).context("serializing configuration")?;
-        fs::write(path, text).context("writing configuration")
+        fs::write(path, text).context("writing configuration")?;
+        crate::log_info!("configuration saved");
+        Ok(())
     }
 
     pub fn load_history() -> Vec<HistoryEntry> {
         let path = match Self::config_dir() {
             Ok(dir) => dir.join("history.json"),
-            Err(_) => return Vec::new(),
+            Err(_) => {
+                crate::log_warn!("cannot determine config directory for history");
+                return Vec::new();
+            }
         };
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(_) => return Vec::new(),
+            Err(_) => {
+                crate::log_warn!("could not read history file");
+                return Vec::new();
+            }
         };
-        serde_json::from_str(&text).unwrap_or_default()
+        match serde_json::from_str(&text) {
+            Ok(entries) => entries,
+            Err(_) => {
+                crate::log_warn!("history file is corrupted, starting fresh");
+                Vec::new()
+            }
+        }
     }
 
     pub fn save_history(history: &[HistoryEntry]) -> Result<()> {

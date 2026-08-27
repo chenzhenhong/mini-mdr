@@ -137,14 +137,17 @@ pub fn detect() {
             let lower = value.to_ascii_lowercase();
             if lower.starts_with("zh") {
                 set_lang(Language::Zh);
+                crate::log_info!("detected language: zh-CN");
                 return;
             }
             if lower != "c" && lower != "posix" {
                 set_lang(Language::En);
+                crate::log_info!("detected language: en");
                 return;
             }
         }
     }
 
     set_lang(Language::En);
+    crate::log_info!("detected language: en (default)");
 }

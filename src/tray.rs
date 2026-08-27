@@ -55,11 +55,18 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
     let _ = TRAY_HANDLE.set(handle.clone());
 
     let quit_flag = Arc::new(AtomicBool::new(false));
-    let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag));
+    if signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag)).is_err() {
+        crate::log_warn!("failed to register SIGINT handler");
+    }
     #[cfg(unix)]
-    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&quit_flag));
+    if signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&quit_flag)).is_err() {
+        crate::log_warn!("failed to register SIGHUP handler");
+    }
     #[cfg(unix)]
-    let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&quit_flag));
+    if signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&quit_flag)).is_err() {
+        crate::log_warn!("failed to register SIGTERM handler");
+    }
+    crate::log_info!("tray initialized");
 
     tray.run(move |event| {
         if quit_flag.load(Ordering::Relaxed) {

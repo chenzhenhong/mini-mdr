@@ -44,6 +44,7 @@ impl MpvBackend {
     fn session(&mut self) -> Result<&mut MpvSession> {
         if self.session.is_none() {
             self.session = Some(MpvSession::start(&self.executable)?);
+            crate::log_info!("mpv process started");
         }
         self.session.as_mut().context("mpv session did not start")
     }
@@ -168,6 +169,9 @@ impl PlayerBackend for MpvBackend {
             command["options"] = json!({"force-media-title": title});
         }
         self.command(command)?;
+        if let Some(title) = title {
+            let _ = self.command(json!({"command": ["set_property", "title", title]}));
+        }
         Ok(())
     }
 

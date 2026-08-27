@@ -48,11 +48,13 @@ impl App {
     }
 
     fn command_loop(mut self, receiver: mpsc::Receiver<Command>) -> Result<()> {
-        if let Err(error) = self.toggle_cast() {
-            crate::log_error!("auto-starting cast: {error:#}");
+        match self.toggle_cast() {
+            Ok(()) => crate::log_info!("auto-started cast"),
+            Err(error) => crate::log_error!("auto-starting cast: {error:#}"),
         }
-        if let Err(error) = self.ensure_settings() {
-            crate::log_error!("auto-starting settings server: {error:#}");
+        match self.ensure_settings() {
+            Ok(()) => crate::log_info!("auto-started settings server"),
+            Err(error) => crate::log_error!("auto-starting settings server: {error:#}"),
         }
         while let Ok(command) = receiver.recv() {
             let result = match command {
@@ -100,6 +102,7 @@ impl App {
             state.upnp_address = upnp_addr.clone();
         }
         crate::settings_server::publish_status(true, upnp_addr);
+        crate::log_info!("cast started on port {upnp_port}");
         Ok(())
     }
 
@@ -118,6 +121,7 @@ impl App {
         crate::settings_server::publish_status(false, None);
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
+        crate::log_info!("cast stopped");
         Ok(())
     }
 
@@ -143,6 +147,7 @@ impl App {
             .map(|server| server.address)
             .ok_or_else(|| anyhow::anyhow!("settings server did not start"))?;
         open::that(format!("http://{address}/"))?;
+        crate::log_info!("opened settings in browser");
         Ok(())
     }
 }

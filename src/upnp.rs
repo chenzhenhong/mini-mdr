@@ -102,6 +102,7 @@ impl UpnpServer {
                     remove_expired_subscriptions(&subscriptions);
                 }
             })?;
+        crate::log_info!("UPnP HTTP server listening on port {}", address.port());
         Ok(Self {
             running,
             thread: Some(thread),
@@ -207,7 +208,12 @@ fn soap_route(
                 body: soap_envelope(&body),
             }
         }
-        Err(error) => soap_fault_response(error.code, error.description),
+        Err(error) => {
+            if error.code == 401 {
+                crate::log_warn!("unknown SOAP action: {action}");
+            }
+            soap_fault_response(error.code, error.description)
+        }
     }
 }
 
@@ -288,6 +294,7 @@ fn execute_av_transport(
             player
                 .load(&uri, display_title.as_deref())
                 .map_err(player_error)?;
+            crate::log_info!("loaded media: {}", display_title.as_deref().unwrap_or(&uri));
             state.uri = Some(uri.clone());
             state.title = display_title.clone();
             state.position = Duration::ZERO;
@@ -477,6 +484,7 @@ fn subscribe(
         let mut guard = match subscriptions.lock() {
             Ok(guard) => guard,
             Err(_) => {
+                crate::log_warn!("failed to lock subscription state for renewal");
                 return plain_response("500 Internal Server Error", "subscription state failed\n");
             }
         };
@@ -484,6 +492,7 @@ fn subscribe(
             return plain_response("412 Precondition Failed", "unknown SID\n");
         };
         subscription.expires_at = Instant::now() + timeout;
+        crate::log_info!("GENA subscription renewed SID={sid}");
         return subscription_response(sid, timeout);
     }
 
@@ -513,6 +522,7 @@ fn subscribe(
     };
     if let Ok(mut guard) = subscriptions.lock() {
         guard.insert(sid.clone(), subscription);
+        crate::log_info!("GENA subscription created SID={sid}");
     } else {
         return plain_response("500 Internal Server Error", "subscription state failed\n");
     }
@@ -564,7 +574,10 @@ fn notify_subscribers(
 fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &str) {
     let state = match state.lock() {
         Ok(state) => state.clone(),
-        Err(_) => return,
+        Err(_) => {
+            crate::log_warn!("failed to lock renderer state for GENA notification");
+            return;
+        }
     };
     let (callback, sequence, service) = match subscriptions.lock() {
         Ok(mut guard) => match guard.get_mut(sid) {
@@ -579,7 +592,10 @@ fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &st
             }
             None => return,
         },
-        Err(_) => return,
+        Err(_) => {
+            crate::log_warn!("failed to lock subscription state for GENA notification");
+            return;
+        }
     };
     let body = event_body(service, &state);
     if let Err(error) = send_notify(&callback, sid, sequence, &body) {
@@ -955,7 +971,12 @@ fn new_sid() -> String {
 fn remove_expired_subscriptions(subscriptions: &SharedSubscriptions) {
     if let Ok(mut guard) = subscriptions.lock() {
         let now = Instant::now();
+        let before = guard.len();
         guard.retain(|_, subscription| subscription.expires_at > now);
+        let removed = before - guard.len();
+        if removed > 0 {
+            crate::log_info!("removed {removed} expired GENA subscription(s)");
+        }
     }
 }
 fn header_value<'a>(headers: &'a str, target: &str) -> Option<&'a str> {

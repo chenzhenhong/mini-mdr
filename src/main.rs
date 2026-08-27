@@ -19,8 +19,10 @@ use app::App;
 use config::Config;
 
 fn main() -> Result<()> {
+    crate::log::init();
     i18n::detect();
     let config = Config::load()?;
     i18n::set_lang(i18n::resolve_language(&config.settings.language));
+    log_info!("mini-mdr starting");
     App::new(config)?.run()
 }

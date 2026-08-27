@@ -66,7 +66,10 @@ pub fn init_watcher() {
     }
     let dir = match crate::config::Config::config_dir() {
         Ok(dir) => dir,
-        Err(_) => return,
+        Err(_) => {
+            crate::log_warn!("cannot determine config directory for file watcher");
+            return;
+        }
     };
     let _ = std::fs::create_dir_all(&dir);
     let handler = move |res: std::result::Result<Event, notify::Error>| {
@@ -82,6 +85,8 @@ pub fn init_watcher() {
     if let Ok(mut watcher) = notify::recommended_watcher(handler) {
         let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
         let _ = WATCHER.set(Mutex::new(watcher));
+    } else {
+        crate::log_warn!("failed to start config file watcher");
     }
 }
 
@@ -98,8 +103,12 @@ impl SettingsServer {
         state: Arc<Mutex<RendererState>>,
     ) -> Result<Self> {
         init_watcher();
-        let listener = TcpListener::bind(("127.0.0.1", preferred_port))
-            .or_else(|_| TcpListener::bind(("127.0.0.1", 0)))?;
+        let listener = TcpListener::bind(("127.0.0.1", preferred_port)).or_else(|_| {
+            crate::log_warn!(
+                "preferred settings port {preferred_port} unavailable, using ephemeral port"
+            );
+            TcpListener::bind(("127.0.0.1", 0))
+        })?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
         let running = Arc::new(AtomicBool::new(true));
@@ -131,6 +140,7 @@ impl SettingsServer {
                     }
                 }
             })?;
+        crate::log_info!("settings server listening on http://{address}");
         Ok(Self {
             address,
             running,
@@ -171,6 +181,13 @@ fn serve(
     let lang = crate::i18n::resolve_language(&cfg_language);
 
     if !same_origin(&headers, address) {
+        crate::log_warn!(
+            "rejected cross-origin settings request from {}",
+            headers
+                .get("origin")
+                .map(String::as_str)
+                .unwrap_or("unknown")
+        );
         return respond(
             stream,
             "403 Forbidden",
@@ -216,6 +233,10 @@ fn serve(
             let settings_hint = t(lang, "settings-hint");
             let time_col = t(lang, "settings-history-time");
             let title_col = t(lang, "settings-history-title");
+            let index_col = t(lang, "settings-history-index");
+            let copy_link = t(lang, "settings-history-copy-link");
+            let open_in_browser = t(lang, "settings-history-open-in-browser");
+            let copied_msg = t(lang, "settings-history-copied");
             let saved_msg = t(lang, "settings-saved");
             let save_err_msg = t(lang, "error-save-failed");
             let about_title = t(lang, "about-title");
@@ -265,6 +286,10 @@ fn serve(
                 ("HISTORY_SUBTITLE", history_subtitle.as_str()),
                 ("TIME_COL", time_col.as_str()),
                 ("TITLE_COL", title_col.as_str()),
+                ("INDEX_COL", index_col.as_str()),
+                ("COPY_LINK", copy_link.as_str()),
+                ("OPEN_IN_BROWSER", open_in_browser.as_str()),
+                ("COPIED_MSG", copied_msg.as_str()),
                 ("SAVED_MSG", saved_msg.as_str()),
                 ("SAVE_ERR_MSG", save_err_msg.as_str()),
                 ("ABOUT_TITLE", about_title.as_str()),
@@ -309,7 +334,10 @@ fn serve(
                 .unwrap_or_default();
             let fields = parse_form(body)?;
             let (ok, message) = match update_config(config, &fields, lang) {
-                Ok(()) => (true, t(lang, "settings-saved")),
+                Ok(()) => {
+                    crate::log_info!("settings updated");
+                    (true, t(lang, "settings-saved"))
+                }
                 Err(error) => (false, format!("{}: {error}", t(lang, "error-save-failed"))),
             };
             let body = serde_json::json!({ "ok": ok, "message": message }).to_string();
@@ -473,8 +501,10 @@ fn render(template: &str, vars: &[(&str, &str)]) -> String {
 }
 
 fn load_template() -> String {
-    std::fs::read_to_string("resources/index.html")
-        .unwrap_or_else(|_| include_str!("../resources/index.html").to_string())
+    std::fs::read_to_string("resources/index.html").unwrap_or_else(|err| {
+        crate::log_warn!("failed to load index.html from disk ({err}), using embedded copy");
+        include_str!("../resources/index.html").to_string()
+    })
 }
 
 fn language_options(lang: Language, current: &str) -> String {
