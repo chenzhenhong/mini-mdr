@@ -501,8 +501,8 @@ fn render(template: &str, vars: &[(&str, &str)]) -> String {
 }
 
 fn load_template() -> String {
-    std::fs::read_to_string("resources/index.html").unwrap_or_else(|err| {
-        crate::log_warn!("failed to load index.html from disk ({err}), using embedded copy");
+    std::fs::read_to_string("resources/index.html").unwrap_or_else(|_err| {
+        crate::log_info!("index.html not on disk, using embedded copy");
         include_str!("../resources/index.html").to_string()
     })
 }

@@ -1,6 +1,6 @@
 # Maintainer: sanne <2246467700@qq.com>
 pkgname=mini-mdr-git
-pkgver=0.2.21.r2.1827d91
+pkgver=0.2.21.r3.258591e
 pkgrel=1
 pkgdesc='A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend'
 arch=('x86_64')
