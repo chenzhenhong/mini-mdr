@@ -51,6 +51,9 @@ impl App {
         if let Err(error) = self.toggle_cast() {
             crate::log_error!("auto-starting cast: {error:#}");
         }
+        if let Err(error) = self.ensure_settings() {
+            crate::log_error!("auto-starting settings server: {error:#}");
+        }
         while let Ok(command) = receiver.recv() {
             let result = match command {
                 Command::ToggleCast => self.toggle_cast(),
@@ -111,16 +114,22 @@ impl App {
         Ok(())
     }
 
-    fn open_settings(&mut self) -> Result<()> {
-        if self.settings.is_none() {
-            let config = Arc::clone(&self.config);
-            let port = lock(&config)?.settings.port;
-            self.settings = Some(crate::settings_server::SettingsServer::start(
-                port,
-                config,
-                Arc::clone(&self.state),
-            )?);
+    fn ensure_settings(&mut self) -> Result<()> {
+        if self.settings.is_some() {
+            return Ok(());
         }
+        let config = Arc::clone(&self.config);
+        let port = lock(&config)?.settings.port;
+        self.settings = Some(crate::settings_server::SettingsServer::start(
+            port,
+            config,
+            Arc::clone(&self.state),
+        )?);
+        Ok(())
+    }
+
+    fn open_settings(&mut self) -> Result<()> {
+        self.ensure_settings()?;
         let address = self
             .settings
             .as_ref()
