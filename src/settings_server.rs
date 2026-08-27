@@ -266,6 +266,18 @@ fn serve(
             respond(stream, "200 OK", "application/json; charset=utf-8", &body)
         }
         ("GET", "/events") => sse_stream(stream, state, running),
+        ("GET", "/icon.png") => serve_asset(
+            stream,
+            "icon.png",
+            "image/png",
+            include_bytes!("../resources/icon.png"),
+        ),
+        ("GET", "/favicon.ico") => serve_asset(
+            stream,
+            "icon.ico",
+            "image/x-icon",
+            include_bytes!("../resources/icon.ico"),
+        ),
         ("POST", "/settings") => {
             let body = request
                 .split_once("\r\n\r\n")
@@ -558,6 +570,26 @@ fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str)
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n{body}",
         body.len()
     )?;
+    Ok(())
+}
+
+fn serve_asset(
+    stream: &mut TcpStream,
+    name: &str,
+    content_type: &str,
+    embedded: &'static [u8],
+) -> Result<()> {
+    let body = std::fs::read(format!("resources/{name}")).unwrap_or_else(|_| embedded.to_vec());
+    respond_bytes(stream, content_type, &body)
+}
+
+fn respond_bytes(stream: &mut TcpStream, content_type: &str, body: &[u8]) -> Result<()> {
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        body.len()
+    )?;
+    stream.write_all(body)?;
     Ok(())
 }
 
