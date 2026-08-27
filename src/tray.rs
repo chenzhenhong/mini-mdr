@@ -20,6 +20,7 @@ fn menu(casting: bool, autostart: bool, lang: Language) -> Menu {
     let quit = t(lang, "tray-quit");
     Menu::new()
         .item(MenuItem::checkbox(TOGGLE_CAST, toggle, casting))
+        .item(MenuItem::separator())
         .item(MenuItem::button(OPEN_SETTINGS, settings))
         .item(MenuItem::checkbox(AUTOSTART, autostart_label, autostart))
         .item(MenuItem::button(QUIT, quit))
