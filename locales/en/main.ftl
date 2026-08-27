@@ -13,7 +13,7 @@ settings-mpv-path = mpv Executable Path
 settings-save = Save Settings
 settings-language = Language
 settings-language-system = System default
-settings-saved = Settings saved. Device name and player settings take effect on the next Start Cast.
+settings-saved = Settings saved. Language takes effect immediately. Other settings require a restart of Cast.
 settings-section-history = History
 settings-history-index = #
 settings-history-time = Time
@@ -26,7 +26,7 @@ settings-history-empty-sub = Your played media history will appear here.
 settings-history-subtitle = View your recently played media history.
 settings-max-history = Max History Entries
 settings-status = Status
-settings-hint = Changes will be applied immediately.
+settings-hint = Device name, player, and max history settings require a restart of Cast (stop then start) to take effect.
 
 # Tabs
 tab-settings = Settings
