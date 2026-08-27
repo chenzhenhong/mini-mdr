@@ -360,8 +360,10 @@ fn parse_headers(request: &str) -> HashMap<String, String> {
 
 fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
     let expected = format!("http://{address}");
+    let localhost = format!("http://localhost:{}", address.port());
     if let Some(origin) = headers.get("origin")
         && !origin.eq_ignore_ascii_case(&expected)
+        && !origin.eq_ignore_ascii_case(&localhost)
     {
         return false;
     }
