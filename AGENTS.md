@@ -33,13 +33,11 @@ playback toggle:
   SSDP and UPnP services.
 - Stop Cast must not stop an already-running settings server.
 
-The application auto-starts cast on launch. The settings server is lazy and
-must not start during application startup:
+The application auto-starts cast and the settings server on launch:
 
-- The first Open Settings action starts it.
-- It binds to `127.0.0.1:7878` when available.
+- The settings server binds to `127.0.0.1:7878` when available.
 - If the preferred port is unavailable, it chooses an ephemeral fallback port.
-- Later Open Settings actions reuse the same server.
+- Open Settings opens the page in the default browser and reuses the same server.
 - It is shut down on application exit.
 
 The application handles SIGINT, SIGHUP, and SIGTERM for clean shutdown on
@@ -60,7 +58,7 @@ keys to both `locales/en/main.ftl` and `locales/zh-CN/main.ftl`.
 main
   -> App
       -> tray command channel
-      -> lazy settings server
+      -> settings server
       -> Cast lifecycle
           -> UpnpServer
           -> SsdpServer
@@ -89,7 +87,7 @@ src/i18n.rs                 Language enum, locale detection, FluentBundle wrappe
 src/log.rs                  Panic-free stderr logging for GUI subsystem
 src/state.rs                Cast, transport, and renderer state types; HistoryEntry
 src/tray.rs                 ldtray integration, three menu actions, signal handling
-src/settings_server.rs      Lazy loopback settings HTTP server (settings + history UI)
+src/settings_server.rs      Loopback settings HTTP server (settings + history UI)
 src/ssdp.rs                 SSDP multicast listener and M-SEARCH response
 src/upnp.rs                 UPnP HTTP descriptions and SOAP handling
 src/player/mod.rs           PlayerBackend trait and backend factory
@@ -310,8 +308,8 @@ Always run `cargo fmt` before committing. CI enforces `cargo fmt --check` and
 
 Protocol verification should check:
 
-- No settings listener exists immediately after process startup.
-- Open Settings starts exactly one loopback server and reuses it.
+- Settings server is listening on loopback immediately after process startup.
+- Open Settings opens the page in the default browser and reuses the same server.
 - Settings requests with a foreign `Origin` or `Sec-Fetch-Site: cross-site`
   are rejected with 403; device names containing control characters are
   rejected on save.

@@ -24,7 +24,7 @@ controlled through mpv's JSON IPC interface.
 - Default `mpv` backend over JSON IPC (named pipe on Windows, Unix socket
   elsewhere); the mpv process starts lazily on first media load
 - System-tray-only application control with a dynamic Start/Stop Cast label
-- Lazy local settings server with an editable form that persists configuration
+- Local settings server with an editable form that persists configuration
 - Media history tracking with configurable max entries (persisted to disk)
 - Signal handling for clean shutdown (SIGINT, SIGHUP, SIGTERM on Unix)
 - Auto-start cast on launch
@@ -86,8 +86,10 @@ Install `mpv`, then run:
 cargo run
 ```
 
-The application starts with Cast services enabled. The settings HTTP server is
-lazy and only starts when `Open Settings` is first selected.
+The application starts with Cast services and the settings HTTP server enabled.
+The settings server binds to `127.0.0.1:7878` (or an ephemeral fallback port if
+busy) and opens the page with the system default browser when `Open Settings` is
+selected.
 
 ## Runtime Behavior
 
@@ -103,13 +105,12 @@ started.
 
 ### Open Settings
 
-The settings server is deliberately lazy:
+The settings server starts automatically on launch:
 
 ```text
-Application startup       -> no settings listener
-First Open Settings click -> bind 127.0.0.1:7878
+Application startup       -> bind 127.0.0.1:7878
 Port conflict             -> select an ephemeral fallback port
-Later clicks              -> reuse the same server
+Open Settings click       -> open the page in the default browser
 ```
 
 The server listens only on loopback and opens the page with the system default
@@ -206,7 +207,7 @@ mpv --version
 
 Useful manual checks:
 
-1. Start the application and confirm that no settings port is listening.
+1. Start the application and confirm the settings port is listening on `127.0.0.1`.
 2. Click `Open Settings` and confirm a browser opens on `127.0.0.1`.
 3. Click `Start Cast` and send an SSDP `M-SEARCH` request.
 4. Fetch the returned `device.xml` URL.
