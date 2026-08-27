@@ -144,7 +144,7 @@ fn serve(
         .lock()
         .map(|c| c.settings.language.clone())
         .unwrap_or_default();
-    let lang = crate::i18n::resolve_language(&cfg_language);
+    let lang = crate::i18n::resolve_language(cfg_language);
 
     if !same_origin(&headers, address) {
         return respond(
@@ -395,7 +395,7 @@ fn update_config(
     guard.settings.max_history = max_history;
     guard.settings.language = language.to_owned();
     guard.save()?;
-    crate::i18n::set_lang(crate::i18n::resolve_language(&language));
+    crate::i18n::set_lang(crate::i18n::resolve_language(language));
     Ok(())
 }
 
