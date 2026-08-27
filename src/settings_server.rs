@@ -367,11 +367,6 @@ fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
     {
         return false;
     }
-    if let Some(site) = headers.get("sec-fetch-site")
-        && site.eq_ignore_ascii_case("cross-site")
-    {
-        return false;
-    }
     true
 }
 
