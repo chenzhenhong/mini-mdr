@@ -144,7 +144,7 @@ fn serve(
         .lock()
         .map(|c| c.settings.language.clone())
         .unwrap_or_default();
-    let lang = crate::i18n::resolve_language(cfg_language);
+    let lang = crate::i18n::resolve_language(&cfg_language);
 
     if !same_origin(&headers, address) {
         return respond(
