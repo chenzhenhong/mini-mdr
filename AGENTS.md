@@ -11,7 +11,7 @@ mini-mdr 的 AI 编码代理约定。改动前请先读此文件。
 
 ## 发布纪律
 - **不要**自动修改 `Cargo.toml` 版本号、打 tag 或触发 release。
-- 只有用户明确说“release一下”时才执行：把 `Cargo.toml` 版本号升到下一位（当前最新 tag 为 `v0.2.12`），提交，打 `vX.Y.Z` tag 并 `git push --tags`，由 CI 自动出 release。
+- 只有用户明确说“release一下”时才执行：把 `Cargo.toml` 版本号升到下一位（当前最新 tag 为 `v0.2.13`），提交，打 `vX.Y.Z` tag 并 `git push --tags`，由 CI 自动出 release。
 - 平时功能/修复改动直接提交并 `git push origin main`，不打 tag。
 
 ## 环境注意
