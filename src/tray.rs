@@ -23,6 +23,7 @@ fn menu(casting: bool, autostart: bool, lang: Language) -> Menu {
         .item(MenuItem::separator())
         .item(MenuItem::button(OPEN_SETTINGS, settings))
         .item(MenuItem::checkbox(AUTOSTART, autostart_label, autostart))
+        .item(MenuItem::separator())
         .item(MenuItem::button(QUIT, quit))
 }
 
