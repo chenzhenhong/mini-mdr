@@ -24,6 +24,35 @@ impl Language {
     }
 }
 
+/// Metadata for a language supported by the UI, used to build selectors dynamically.
+#[derive(Clone, Copy)]
+pub struct LanguageInfo {
+    pub code: &'static str,
+    pub language: Language,
+    pub name: &'static str,
+}
+
+/// All UI languages. Add a new entry here plus a matching `locales/<code>/main.ftl`
+/// to introduce a language; no settings-page code needs to change.
+pub const LANGUAGES: &[LanguageInfo] = &[
+    LanguageInfo { code: "en", language: Language::En, name: "English" },
+    LanguageInfo { code: "zh-CN", language: Language::Zh, name: "中文" },
+];
+
+pub fn language_from_code(code: &str) -> Option<Language> {
+    LANGUAGES.iter().find(|l| l.code == code).map(|l| l.language)
+}
+
+/// Resolves a stored language code to a `Language`. An empty code means "follow
+/// the system", which falls back to the global language set by `detect()`.
+pub fn resolve_language(code: &str) -> Language {
+    if code.is_empty() {
+        lang()
+    } else {
+        language_from_code(code).unwrap_or_else(lang)
+    }
+}
+
 thread_local! {
     static BUNDLE: RefCell<Option<(Language, FluentBundle<FluentResource>)>> = const { RefCell::new(None) };
 }

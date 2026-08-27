@@ -30,6 +30,7 @@ pub struct PlayerConfig {
 pub struct SettingsConfig {
     pub port: u16,
     pub max_history: usize,
+    pub language: String,
 }
 
 impl Default for DeviceConfig {
@@ -57,6 +58,7 @@ impl Default for SettingsConfig {
         Self {
             port: 7878,
             max_history: 200,
+            language: String::new(),
         }
     }
 }

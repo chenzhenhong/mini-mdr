@@ -11,6 +11,8 @@ settings-device-name = Device Name
 settings-player-backend = Player Backend
 settings-mpv-path = mpv Executable Path
 settings-save = Save Settings
+settings-language = Language
+settings-language-system = System default
 settings-saved = Settings saved. Device name and player settings take effect on the next Start Cast.
 settings-section-history = History
 settings-history-time = Time
@@ -34,6 +36,7 @@ error-name-length = Device name must be 1 to 128 characters
 error-name-control = Device name must not contain control characters
 error-only-mpv = Only mpv backend is available in this version
 error-mpv-path-empty = mpv path must not be empty
+error-language-invalid = Unknown language selection
 
 # State display
 cast-stopped = Stopped

@@ -11,6 +11,8 @@ settings-device-name = 设备名称
 settings-player-backend = 播放器后端
 settings-mpv-path = mpv 可执行文件路径
 settings-save = 保存设置
+settings-language = 语言
+settings-language-system = 跟随系统
 settings-saved = 设置已保存。设备名称和播放器设置将在下次开始 Cast 时生效。
 settings-section-history = 历史记录
 settings-history-time = 时间
@@ -34,6 +36,7 @@ error-name-length = 设备名称必须为 1 到 128 个字符
 error-name-control = 设备名称不能包含控制字符
 error-only-mpv = 当前版本只提供 mpv 后端
 error-mpv-path-empty = mpv 路径不能为空
+error-language-invalid = 未知的语言选择
 
 # State display
 cast-stopped = 已停止

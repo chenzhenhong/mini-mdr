@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    i18n::{Language, lang, t},
+    i18n::{Language, t},
     state::RendererState,
 };
 use anyhow::{Context, Result};
@@ -75,7 +75,11 @@ fn serve(
     let method = parts.next().unwrap_or_default();
     let path = parts.next().unwrap_or_default();
     let headers = parse_headers(&request);
-    let lang = lang();
+    let cfg_language = config
+        .lock()
+        .map(|c| c.settings.language.clone())
+        .unwrap_or_default();
+    let lang = crate::i18n::resolve_language(&cfg_language);
 
     if !same_origin(&headers, address) {
         return respond(
@@ -122,6 +126,8 @@ fn serve(
             let save_err_msg = t(lang, "error-save-failed");
             let about_title = t(lang, "about-title");
             let about_desc = t(lang, "about-description");
+            let label_language = t(lang, "settings-language");
+            let language_options_str = language_options(lang, &config.settings.language);
             let vars: Vec<(&str, &str)> = vec![
                 ("HTML_LANG", html_lang),
                 ("TITLE", title.as_str()),
@@ -130,6 +136,8 @@ fn serve(
                 ("TAB_ABOUT", tab_about.as_str()),
                 ("SUBTITLE", subtitle.as_str()),
                 ("STATUS_LABEL", status_label.as_str()),
+                ("LABEL_LANGUAGE", label_language.as_str()),
+                ("LANGUAGE_OPTIONS", language_options_str.as_str()),
                 ("INDICATOR_COLOR", indicator_color),
                 ("INDICATOR_TEXT", indicator_text.as_str()),
                 ("SETTINGS_HEADING", settings_heading.as_str()),
@@ -272,6 +280,13 @@ fn update_config(
         .and_then(|value| value.trim().parse::<usize>().ok())
         .unwrap_or(200)
         .min(10000);
+    let language = fields
+        .get("language")
+        .map(|value| value.trim())
+        .unwrap_or_default();
+    if !language.is_empty() && crate::i18n::language_from_code(language).is_none() {
+        anyhow::bail!(t(lang, "error-language-invalid"));
+    }
     if name.is_empty() || name.len() > 128 {
         anyhow::bail!(t(lang, "error-name-length"));
     }
@@ -291,7 +306,9 @@ fn update_config(
     guard.player.backend = backend.to_owned();
     guard.player.mpv_path = mpv_path.to_owned();
     guard.settings.max_history = max_history;
+    guard.settings.language = language.to_owned();
     guard.save()?;
+    crate::i18n::set_lang(crate::i18n::resolve_language(&language));
     Ok(())
 }
 
@@ -337,6 +354,25 @@ fn render(template: &str, vars: &[(&str, &str)]) -> String {
 fn load_template() -> String {
     std::fs::read_to_string("resources/index.html")
         .unwrap_or_else(|_| include_str!("../resources/index.html").to_string())
+}
+
+fn language_options(lang: Language, current: &str) -> String {
+    let system_label = t(lang, "settings-language-system");
+    let mut out = String::new();
+    out.push_str(&format!(
+        "<option value=\"\"{}>{}</option>",
+        if current.is_empty() { " selected" } else { "" },
+        escape_html(&system_label),
+    ));
+    for info in crate::i18n::LANGUAGES {
+        out.push_str(&format!(
+            "<option value=\"{}\"{}>{}</option>",
+            escape_html(info.code),
+            if info.code == current { " selected" } else { "" },
+            escape_html(info.name),
+        ));
+    }
+    out
 }
 
 fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str) -> Result<()> {
