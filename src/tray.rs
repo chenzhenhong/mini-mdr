@@ -23,7 +23,8 @@ fn menu(casting: bool, lang: Language) -> Menu {
     } else {
         "tray-start-cast"
     };
-    let toggle = t(lang, key);
+    let dot = if casting { "\u{1F7E2} " } else { "\u{1F534} " };
+    let toggle = format!("{}{}", dot, t(lang, key));
     let settings = t(lang, "tray-open-settings");
     let quit = t(lang, "tray-quit");
     Menu::new()
