@@ -1,13 +1,8 @@
 use crate::i18n::{Language, t};
-use crate::state::RendererState;
 use anyhow::Result;
 use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
-
-fn is_casting(state: &Arc<Mutex<RendererState>>) -> bool {
-    matches!(state.lock().map(|s| s.cast), Ok(crate::state::CastState::Running))
-}
+use std::sync::{Arc, mpsc};
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
@@ -30,10 +25,10 @@ fn menu(casting: bool, autostart: bool, lang: Language) -> Menu {
         .item(MenuItem::button(QUIT, quit))
 }
 
-pub fn run(sender: mpsc::Sender<crate::app::Command>, state: Arc<Mutex<RendererState>>) -> Result<()> {
+pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
     let icon = tray_icon()?;
     let lang = crate::i18n::lang();
-    let mut casting = is_casting(&state);
+    let mut casting = true;
     let mut autostart = crate::autostart::is_enabled();
     let tray = match Tray::new(
         TrayConfig::new(icon)

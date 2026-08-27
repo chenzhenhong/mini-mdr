@@ -36,13 +36,12 @@ impl App {
     }
 
     pub fn run(self) -> Result<()> {
-        let state = self.state.clone();
         let (sender, receiver) = mpsc::channel();
         let app_thread = std::thread::Builder::new()
             .name("mini-mdr-app".into())
             .spawn(move || self.command_loop(receiver))?;
 
-        let tray_result = crate::tray::run(sender, state);
+        let tray_result = crate::tray::run(sender);
         let app_result = app_thread
             .join()
             .map_err(|_| anyhow::anyhow!("application thread panicked"))?;
