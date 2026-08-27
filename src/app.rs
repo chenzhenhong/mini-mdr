@@ -92,8 +92,16 @@ impl App {
         };
         self.player = Some(player);
         self.cast = Some((upnp, ssdp));
-        lock(&self.state)?.cast = crate::state::CastState::Running;
-        crate::settings_server::publish_status(crate::state::CastState::Running);
+        let upnp_port = self.cast.as_ref().map(|(u, _)| u.port()).unwrap_or(0);
+        let upnp_addr = crate::ssdp::local_ip()
+            .map(|ip| format!("http://{ip}:{upnp_port}"))
+            .ok();
+        {
+            let mut state = lock(&self.state)?;
+            state.cast = crate::state::CastState::Running;
+            state.upnp_address = upnp_addr.clone();
+        }
+        crate::settings_server::publish_status(true, upnp_addr);
         Ok(())
     }
 
@@ -108,7 +116,8 @@ impl App {
         self.player = None;
         let mut state = lock(&self.state)?;
         state.cast = crate::state::CastState::Stopped;
-        crate::settings_server::publish_status(crate::state::CastState::Stopped);
+        state.upnp_address = None;
+        crate::settings_server::publish_status(false, None);
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
         Ok(())

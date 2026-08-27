@@ -66,6 +66,7 @@ pub struct RendererState {
     pub position: Duration,
     pub volume: u8,
     pub muted: bool,
+    pub upnp_address: Option<String>,
 }
 
 impl Default for RendererState {
@@ -79,6 +80,7 @@ impl Default for RendererState {
             position: Duration::ZERO,
             volume: 100,
             muted: false,
+            upnp_address: None,
         }
     }
 }

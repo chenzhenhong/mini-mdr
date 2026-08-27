@@ -19,7 +19,10 @@ use std::{
 };
 
 enum SettingsEvent {
-    Status(bool),
+    Status {
+        running: bool,
+        address: Option<String>,
+    },
     History(String),
 }
 
@@ -38,10 +41,15 @@ fn subscribe() -> Receiver<SettingsEvent> {
     rx
 }
 
-pub fn publish_status(cast: crate::state::CastState) {
-    let running = cast == crate::state::CastState::Running;
+pub fn publish_status(running: bool, address: Option<String>) {
     if let Ok(mut subscribers) = events().lock() {
-        subscribers.retain(|tx| tx.send(SettingsEvent::Status(running)).is_ok());
+        subscribers.retain(|tx| {
+            tx.send(SettingsEvent::Status {
+                running,
+                address: address.clone(),
+            })
+            .is_ok()
+        });
     }
 }
 
@@ -540,10 +548,11 @@ fn sse_stream(
         .lock()
         .map(|s| s.cast == crate::state::CastState::Running)
         .unwrap_or(false);
+    let address_now = state.lock().ok().and_then(|s| s.upnp_address.clone());
     if !send_event(
         stream,
         "status",
-        &serde_json::json!({ "running": running_now }).to_string(),
+        &serde_json::json!({ "running": running_now, "address": address_now }).to_string(),
     ) {
         return Ok(());
     }
@@ -557,11 +566,11 @@ fn sse_stream(
             break;
         }
         match rx.recv_timeout(Duration::from_millis(500)) {
-            Ok(SettingsEvent::Status(is_running)) => {
+            Ok(SettingsEvent::Status { running, address }) => {
                 if !send_event(
                     stream,
                     "status",
-                    &serde_json::json!({ "running": is_running }).to_string(),
+                    &serde_json::json!({ "running": running, "address": address }).to_string(),
                 ) {
                     break;
                 }

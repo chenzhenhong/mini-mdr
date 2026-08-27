@@ -41,7 +41,10 @@ impl SsdpServer {
         let active = Arc::clone(&running);
         let name = sanitize_header_value(device_name);
         let thread = thread::Builder::new().name("ssdp".into()).spawn(move || {
-            let location = format!("http://{}:{http_port}/device.xml", local_ip());
+            let location = format!(
+                "http://{}:{http_port}/device.xml",
+                local_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+            );
             announce(&socket, &location, &name, "ssdp:alive");
             let mut last_announce = Instant::now();
             let mut buffer = [0; 4096];
@@ -166,14 +169,14 @@ fn header<'a>(request: &'a str, target: &str) -> Option<&'a str> {
     })
 }
 
-fn local_ip() -> IpAddr {
+pub fn local_ip() -> std::result::Result<IpAddr, std::net::AddrParseError> {
     UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
         .ok()
         .and_then(|socket| {
             socket.connect((Ipv4Addr::new(192, 0, 2, 1), 80)).ok()?;
             Some(socket.local_addr().ok()?.ip())
         })
-        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
+        .ok_or_else(|| "127.0.0.1".parse::<IpAddr>().unwrap())
 }
 
 impl Drop for SsdpServer {
