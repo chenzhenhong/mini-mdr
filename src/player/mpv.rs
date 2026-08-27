@@ -50,7 +50,23 @@ impl MpvBackend {
     }
 
     fn command(&mut self, command: Value) -> Result<Value> {
-        self.session()?.command(command)
+        match self.session()?.command(command.clone()) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                let msg = error.to_string();
+                let is_pipe_error = msg.contains("Broken pipe")
+                    || msg.contains("os error 32")
+                    || msg.contains("os error 232")
+                    || msg.contains("IPC closed");
+                if is_pipe_error {
+                    crate::log_warn!("mpv process lost, restarting...");
+                    self.session = None;
+                    self.session()?.command(command)
+                } else {
+                    Err(error)
+                }
+            }
+        }
     }
 }
 
