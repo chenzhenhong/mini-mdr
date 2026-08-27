@@ -66,7 +66,6 @@ pub struct RendererState {
     pub position: Duration,
     pub volume: u8,
     pub muted: bool,
-    pub history: Vec<HistoryEntry>,
 }
 
 impl Default for RendererState {
@@ -80,7 +79,6 @@ impl Default for RendererState {
             position: Duration::ZERO,
             volume: 100,
             muted: false,
-            history: Vec::new(),
         }
     }
 }

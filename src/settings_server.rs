@@ -4,17 +4,78 @@ use crate::{
     state::RendererState,
 };
 use anyhow::{Context, Result};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
+        mpsc::{channel, Sender, Receiver, RecvTimeoutError},
     },
     thread,
     time::Duration,
 };
+
+enum SettingsEvent {
+    Status(bool),
+    History(String),
+}
+
+static EVENTS: OnceLock<Mutex<Vec<Sender<SettingsEvent>>>> = OnceLock::new();
+static WATCHER: OnceLock<Mutex<RecommendedWatcher>> = OnceLock::new();
+
+fn events() -> &'static Mutex<Vec<Sender<SettingsEvent>>> {
+    EVENTS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn subscribe() -> Receiver<SettingsEvent> {
+    let (tx, rx) = channel();
+    if let Ok(mut subscribers) = events().lock() {
+        subscribers.push(tx);
+    }
+    rx
+}
+
+pub fn publish_status(cast: crate::state::CastState) {
+    let running = cast == crate::state::CastState::Running;
+    if let Ok(mut subscribers) = events().lock() {
+        subscribers.retain(|tx| tx.send(SettingsEvent::Status(running)).is_ok());
+    }
+}
+
+pub fn publish_history() {
+    let payload = history_payload();
+    if let Ok(mut subscribers) = events().lock() {
+        subscribers.retain(|tx| tx.send(SettingsEvent::History(payload.clone())).is_ok());
+    }
+}
+
+pub fn init_watcher() {
+    if WATCHER.get().is_some() {
+        return;
+    }
+    let dir = match crate::config::Config::config_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let handler = move |res: std::result::Result<Event, notify::Error>| {
+        if let Ok(event) = res
+            && event
+                .paths
+                .iter()
+                .any(|p| p.file_name().map(|n| n == "history.json").unwrap_or(false))
+        {
+            publish_history();
+        }
+    };
+    if let Ok(mut watcher) = notify::recommended_watcher(handler) {
+        let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+        let _ = WATCHER.set(Mutex::new(watcher));
+    }
+}
 
 pub struct SettingsServer {
     pub address: SocketAddr,
@@ -28,6 +89,7 @@ impl SettingsServer {
         config: Arc<Mutex<Config>>,
         state: Arc<Mutex<RendererState>>,
     ) -> Result<Self> {
+        init_watcher();
         let listener = TcpListener::bind(("127.0.0.1", preferred_port))
             .or_else(|_| TcpListener::bind(("127.0.0.1", 0)))?;
         listener.set_nonblocking(true)?;
@@ -433,40 +495,45 @@ fn sse_stream(
         b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: keep-alive\r\n\r\n",
     )?;
     stream.flush()?;
-    let mut last_cast: Option<crate::state::CastState> = None;
-    let mut last_history: Option<String> = None;
+
+    let running_now = state
+        .lock()
+        .map(|s| s.cast == crate::state::CastState::Running)
+        .unwrap_or(false);
+    if !send_event(
+        stream,
+        "status",
+        &serde_json::json!({ "running": running_now }).to_string(),
+    ) {
+        return Ok(());
+    }
+    if !send_event(stream, "history", &history_payload()) {
+        return Ok(());
+    }
+
+    let rx = subscribe();
     loop {
         if !running.load(Ordering::Relaxed) {
             break;
         }
-        let cast = state.lock().map(|s| s.cast).ok();
-        if cast != last_cast {
-            last_cast = cast;
-            let running_now = cast == Some(crate::state::CastState::Running);
-            if !send_event(
-                stream,
-                "status",
-                &serde_json::json!({ "running": running_now }).to_string(),
-            ) {
-                break;
-            }
-        }
-        let entries_opt = read_history_file();
-        let payload = history_payload_from(entries_opt.as_deref().unwrap_or(&[]));
-        if Some(&payload) != last_history.as_ref() {
-            last_history = Some(payload.clone());
-            if !send_event(stream, "history", &payload) {
-                break;
-            }
-        }
-        if entries_opt.is_none() {
-            if let Ok(mut st) = state.lock() {
-                if !st.history.is_empty() {
-                    st.history.clear();
+        match rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(SettingsEvent::Status(is_running)) => {
+                if !send_event(
+                    stream,
+                    "status",
+                    &serde_json::json!({ "running": is_running }).to_string(),
+                ) {
+                    break;
                 }
             }
+            Ok(SettingsEvent::History(payload)) => {
+                if !send_event(stream, "history", &payload) {
+                    break;
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(_) => break,
         }
-        thread::sleep(Duration::from_millis(500));
     }
     Ok(())
 }

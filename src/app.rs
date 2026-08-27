@@ -22,7 +22,6 @@ pub struct App {
 impl App {
     pub fn new(config: crate::config::Config) -> Result<Self> {
         let state = crate::state::RendererState {
-            history: crate::config::Config::load_history(),
             ..Default::default()
         };
         Ok(Self {
@@ -91,6 +90,7 @@ impl App {
         self.player = Some(player);
         self.cast = Some((upnp, ssdp));
         lock(&self.state)?.cast = crate::state::CastState::Running;
+        crate::settings_server::publish_status(crate::state::CastState::Running);
         Ok(())
     }
 
@@ -105,6 +105,7 @@ impl App {
         self.player = None;
         let mut state = lock(&self.state)?;
         state.cast = crate::state::CastState::Stopped;
+        crate::settings_server::publish_status(crate::state::CastState::Stopped);
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
         Ok(())

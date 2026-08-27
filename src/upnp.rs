@@ -293,13 +293,10 @@ fn execute_av_transport(
             state.position = Duration::ZERO;
             state.duration = None;
             state.transport = TransportState::Stopped;
-            state
-                .history
-                .push(crate::state::HistoryEntry::new(uri, display_title));
-            while state.history.len() > max_history {
-                state.history.remove(0);
-            }
-            if let Err(error) = crate::config::Config::save_history(&state.history) {
+            if let Err(error) = crate::config::Config::append_history(
+                crate::state::HistoryEntry::new(uri, display_title),
+                max_history,
+            ) {
                 crate::log_error!("saving history: {error:#}");
             }
             Ok((action_response(service, action, ""), true))

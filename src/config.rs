@@ -112,6 +112,19 @@ impl Config {
         fs::create_dir_all(&dir)?;
         let path = dir.join("history.json");
         let text = serde_json::to_string_pretty(history).context("serializing history")?;
-        fs::write(path, text).context("writing history")
+        let tmp = dir.join("history.json.tmp");
+        fs::write(&tmp, &text).context("writing history")?;
+        fs::rename(&tmp, &path).context("writing history")
+    }
+
+    pub fn append_history(entry: HistoryEntry, max: usize) -> Result<()> {
+        let mut entries = Self::load_history();
+        entries.push(entry);
+        let max = max.max(1);
+        if entries.len() > max {
+            let drop = entries.len() - max;
+            entries.drain(0..drop);
+        }
+        Self::save_history(&entries)
     }
 }
