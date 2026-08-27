@@ -170,6 +170,7 @@ mod macos {
 mod linux {
     use super::*;
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
     fn desktop_path() -> Option<PathBuf> {
         let config = directories::BaseDirs::new()?.config_dir().to_path_buf();
