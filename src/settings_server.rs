@@ -646,15 +646,18 @@ mod tests {
     fn rejects_cross_origin_requests() {
         let address: SocketAddr = "127.0.0.1:7878".parse().unwrap();
         let expected = format!("http://{address}");
+        let localhost = format!("http://localhost:{}", address.port());
         let mut headers = HashMap::new();
         assert!(same_origin(&headers, address));
         headers.insert("origin".into(), expected.clone());
+        assert!(same_origin(&headers, address));
+        headers.insert("origin".into(), localhost.clone());
         assert!(same_origin(&headers, address));
         headers.insert("origin".into(), "http://evil.example".into());
         assert!(!same_origin(&headers, address));
         headers.remove("origin");
         headers.insert("sec-fetch-site".into(), "cross-site".into());
-        assert!(!same_origin(&headers, address));
+        assert!(same_origin(&headers, address));
     }
 
     #[test]
