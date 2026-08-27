@@ -8,7 +8,6 @@ fn lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>> {
 pub enum Command {
     ToggleCast,
     OpenSettings,
-    ToggleAutostart,
     Quit,
 }
 
@@ -57,7 +56,6 @@ impl App {
             let result = match command {
                 Command::ToggleCast => self.toggle_cast(),
                 Command::OpenSettings => self.open_settings(),
-                Command::ToggleAutostart => self.toggle_autostart(),
                 Command::Quit => break,
             };
             if let Err(error) = result {
@@ -110,14 +108,6 @@ impl App {
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
         Ok(())
-    }
-
-    fn toggle_autostart(&mut self) -> Result<()> {
-        if crate::autostart::is_enabled() {
-            crate::autostart::disable()
-        } else {
-            crate::autostart::enable()
-        }
     }
 
     fn open_settings(&mut self) -> Result<()> {

@@ -1,7 +1,6 @@
 # Tray menu
 tray-cast = 投屏
 tray-open-settings = 打开设置
-tray-autostart = 开机启动
 tray-quit = 退出程序
 
 # Settings page
