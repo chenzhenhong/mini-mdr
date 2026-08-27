@@ -25,10 +25,21 @@ settings-status = 状态
 tab-settings = 设置
 tab-history = 历史
 tab-about = 关于
+tab-guide = 教程
 
 # About page
 about-title = 关于
 about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 播放媒体。
+
+# Guide page
+guide-title = 教程
+guide-intro = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它本身不负责音视频解码，需要依赖外部播放器后端。
+guide-player-heading = 1. 安装播放器后端
+guide-player-text = 请自行下载适用于你系统的 mpv 播放器，然后在“设置”中填写 mpv 可执行文件路径。mini-mdr 会通过 mpv 播放由 DLNA/UPnP 控制器（例如手机 App）推送的媒体。
+guide-config-heading = 2. 数据存放位置
+guide-config-text = 配置与播放历史保存在：
+guide-usage-heading = 3. 使用方法
+guide-usage-text = 启动后，mini-mdr 会在局域网内广播一个 DMR 设备。使用任意 DLNA/UPnP 控制器即可投屏到“mini-mdr”。可在托盘菜单切换 Cast 开关，并在设置中修改设备名、语言与播放器。
 
 # Validation errors
 error-save-failed = 保存失败

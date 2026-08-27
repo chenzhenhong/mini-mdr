@@ -23,6 +23,7 @@
       <div class="flex gap-1 text-sm">
         <button data-tab="settings" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_SETTINGS}}</button>
         <button data-tab="history" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_HISTORY}}</button>
+        <button data-tab="guide" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_GUIDE}}</button>
         <button data-tab="about" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_ABOUT}}</button>
       </div>
     </div>
@@ -87,6 +88,27 @@
       </div>
     </section>
 
+    <!-- Guide -->
+    <section id="tab-guide" class="hidden">
+      <h2 class="mb-4 text-base font-semibold text-slate-100">{{GUIDE_TITLE}}</h2>
+      <div class="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm leading-relaxed text-slate-300 shadow-sm">
+        <p>{{GUIDE_INTRO}}</p>
+        <div>
+          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_PLAYER_HEADING}}</h3>
+          <p class="text-slate-400">{{GUIDE_PLAYER_TEXT}}</p>
+        </div>
+        <div>
+          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_CONFIG_HEADING}}</h3>
+          <p class="text-slate-400">{{GUIDE_CONFIG_TEXT}}</p>
+          <pre class="mt-2 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-slate-200">{{CONFIG_DIR}}</pre>
+        </div>
+        <div>
+          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_USAGE_HEADING}}</h3>
+          <p class="text-slate-400">{{GUIDE_USAGE_TEXT}}</p>
+        </div>
+      </div>
+    </section>
+
     <!-- About -->
     <section id="tab-about" class="hidden">
       <h2 class="mb-4 text-base font-semibold text-slate-100">{{ABOUT_TITLE}}</h2>
@@ -138,7 +160,7 @@
           b.classList.toggle('text-white', active);
           b.classList.toggle('text-slate-400', !active);
         });
-        ['settings', 'history', 'about'].forEach(function (n) {
+        ['settings', 'history', 'guide', 'about'].forEach(function (n) {
           document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
         });
       }

@@ -25,10 +25,21 @@ settings-status = Status
 tab-settings = Settings
 tab-history = History
 tab-about = About
+tab-guide = Guide
 
 # About page
 about-title = About
 about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv.
+
+# Guide page
+guide-title = Guide
+guide-intro = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It does not decode audio or video itself — it relies on an external player backend.
+guide-player-heading = 1. Install a player backend
+guide-player-text = Download mpv for your operating system, then open Settings and set the mpv executable path. mini-mdr launches mpv to play media pushed by a DLNA/UPnP controller (for example a phone app).
+guide-config-heading = 2. Where data is stored
+guide-config-text = Your configuration and play history are stored at:
+guide-usage-heading = 3. How to use
+guide-usage-text = After launch, mini-mdr advertises a DMR on your local network. Use any DLNA/UPnP controller to cast to "mini-mdr". Toggle Cast from the tray menu, and change the device name, language, and player in Settings.
 
 # Validation errors
 error-save-failed = Save failed

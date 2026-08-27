@@ -128,11 +128,24 @@ fn serve(
             let about_desc = t(lang, "about-description");
             let label_language = t(lang, "settings-language");
             let language_options_str = language_options(lang, &config.settings.language);
+            let tab_guide = t(lang, "tab-guide");
+            let guide_title = t(lang, "guide-title");
+            let guide_intro = t(lang, "guide-intro");
+            let guide_player_heading = t(lang, "guide-player-heading");
+            let guide_player_text = t(lang, "guide-player-text");
+            let guide_config_heading = t(lang, "guide-config-heading");
+            let guide_config_text = t(lang, "guide-config-text");
+            let guide_usage_heading = t(lang, "guide-usage-heading");
+            let guide_usage_text = t(lang, "guide-usage-text");
+            let config_dir = crate::config::Config::config_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default();
             let vars: Vec<(&str, &str)> = vec![
                 ("HTML_LANG", html_lang),
                 ("TITLE", title.as_str()),
                 ("TAB_SETTINGS", tab_settings.as_str()),
                 ("TAB_HISTORY", tab_history.as_str()),
+                ("TAB_GUIDE", tab_guide.as_str()),
                 ("TAB_ABOUT", tab_about.as_str()),
                 ("SUBTITLE", subtitle.as_str()),
                 ("STATUS_LABEL", status_label.as_str()),
@@ -157,6 +170,15 @@ fn serve(
                 ("SAVE_ERR_MSG", save_err_msg.as_str()),
                 ("ABOUT_TITLE", about_title.as_str()),
                 ("ABOUT_DESC", about_desc.as_str()),
+                ("GUIDE_TITLE", guide_title.as_str()),
+                ("GUIDE_INTRO", guide_intro.as_str()),
+                ("GUIDE_PLAYER_HEADING", guide_player_heading.as_str()),
+                ("GUIDE_PLAYER_TEXT", guide_player_text.as_str()),
+                ("GUIDE_CONFIG_HEADING", guide_config_heading.as_str()),
+                ("GUIDE_CONFIG_TEXT", guide_config_text.as_str()),
+                ("GUIDE_USAGE_HEADING", guide_usage_heading.as_str()),
+                ("GUIDE_USAGE_TEXT", guide_usage_text.as_str()),
+                ("CONFIG_DIR", config_dir.as_str()),
                 ("VERSION", env!("CARGO_PKG_VERSION")),
             ];
             let body = render(&load_template(), &vars);
