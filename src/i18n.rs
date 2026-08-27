@@ -112,16 +112,18 @@ pub fn t_args(lang: Language, key: &str, args: &[(&str, &str)]) -> String {
     })
 }
 
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
-static LANG: OnceLock<Language> = OnceLock::new();
+static LANG: Mutex<Option<Language>> = Mutex::new(None);
 
 pub fn set_lang(lang: Language) {
-    let _ = LANG.set(lang);
+    if let Ok(mut guard) = LANG.lock() {
+        *guard = Some(lang);
+    }
 }
 
 pub fn lang() -> Language {
-    *LANG.get().unwrap_or(&Language::En)
+    LANG.lock().ok().and_then(|g| *g).unwrap_or(Language::En)
 }
 
 pub fn detect() {
