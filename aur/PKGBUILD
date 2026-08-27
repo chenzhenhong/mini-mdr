@@ -1,6 +1,6 @@
 # Maintainer: sanne <2246467700@qq.com>
 pkgname=mini-mdr-git
-pkgver=0.2.0.r0.260f373
+pkgver=0.2.21.r0.b5bdae2
 pkgrel=1
 pkgdesc='A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend'
 arch=('x86_64')
@@ -22,12 +22,12 @@ pkgver() {
 
 build() {
   cd mini-mdr
-  cargo build --release --frozen
+  cargo build --release --locked
 }
 
 check() {
   cd mini-mdr
-  cargo test --frozen
+  cargo test --locked
 }
 
 package() {
