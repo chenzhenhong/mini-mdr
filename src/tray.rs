@@ -20,7 +20,6 @@ fn menu(casting: bool, lang: Language) -> Menu {
         .item(MenuItem::checkbox(TOGGLE_CAST, toggle, casting))
         .item(MenuItem::separator())
         .item(MenuItem::button(OPEN_SETTINGS, settings))
-        .item(MenuItem::separator())
         .item(MenuItem::button(QUIT, quit))
 }
 
