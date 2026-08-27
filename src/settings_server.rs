@@ -40,7 +40,7 @@ impl SettingsServer {
                 while active.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
-                            if let Err(error) = serve(&mut stream, address, &config, &state) {
+                            if let Err(error) = serve(&mut stream, address, &config, &state, &active) {
                                 crate::log_error!("settings request failed: {error:#}");
                             }
                         }
@@ -67,6 +67,7 @@ fn serve(
     address: SocketAddr,
     config: &Arc<Mutex<Config>>,
     state: &Arc<Mutex<RendererState>>,
+    running: &Arc<AtomicBool>,
 ) -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     let request = read_request(stream)?;
@@ -112,6 +113,8 @@ fn serve(
             let tab_about = t(lang, "tab-about");
             let subtitle = t(lang, "settings-subtitle");
             let status_label = t(lang, "settings-status");
+            let status_running = t(lang, "cast-running");
+            let status_stopped = t(lang, "cast-stopped");
             let settings_heading = t(lang, "settings-section-settings");
             let label_name = t(lang, "settings-device-name");
             let label_backend = t(lang, "settings-player-backend");
@@ -153,6 +156,8 @@ fn serve(
                 ("LANGUAGE_OPTIONS", language_options_str.as_str()),
                 ("INDICATOR_COLOR", indicator_color),
                 ("INDICATOR_TEXT", indicator_text.as_str()),
+                ("STATUS_RUNNING", status_running.as_str()),
+                ("STATUS_STOPPED", status_stopped.as_str()),
                 ("SETTINGS_HEADING", settings_heading.as_str()),
                 ("LABEL_NAME", label_name.as_str()),
                 ("LABEL_BACKEND", label_backend.as_str()),
@@ -185,22 +190,10 @@ fn serve(
             respond(stream, "200 OK", "text/html; charset=utf-8", &body)
         }
         ("GET", "/history") => {
-            let state = state.lock().map(|v| v.clone()).unwrap_or_default();
-            let entries: Vec<_> = state
-                .history
-                .iter()
-                .rev()
-                .map(|e| {
-                    serde_json::json!({
-                        "time": e.time_str(),
-                        "title": e.title.clone().unwrap_or_else(|| e.uri.clone()),
-                        "uri": e.uri,
-                    })
-                })
-                .collect();
-            let body = serde_json::json!({ "entries": entries }).to_string();
+            let body = history_payload();
             respond(stream, "200 OK", "application/json; charset=utf-8", &body)
         }
+        ("GET", "/events") => sse_stream(stream, state, running),
         ("POST", "/settings") => {
             let body = request
                 .split_once("\r\n\r\n")
@@ -395,6 +388,87 @@ fn language_options(lang: Language, current: &str) -> String {
         ));
     }
     out
+}
+
+fn read_history_file() -> Option<Vec<crate::state::HistoryEntry>> {
+    let dir = crate::config::Config::config_dir().ok()?;
+    let path = dir.join("history.json");
+    let text = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn history_payload_from(entries: &[crate::state::HistoryEntry]) -> String {
+    let items: Vec<_> = entries
+        .iter()
+        .rev()
+        .map(|e| {
+            serde_json::json!({
+                "time": e.time_str(),
+                "title": e.title.clone().unwrap_or_else(|| e.uri.clone()),
+                "uri": e.uri,
+            })
+        })
+        .collect();
+    serde_json::json!({ "entries": items }).to_string()
+}
+
+fn history_payload() -> String {
+    history_payload_from(&read_history_file().unwrap_or_default())
+}
+
+fn send_event(stream: &mut TcpStream, name: &str, data: &str) -> bool {
+    let msg = format!("event: {name}\ndata: {data}\n\n");
+    match stream.write_all(msg.as_bytes()) {
+        Ok(()) => stream.flush().is_ok(),
+        Err(_) => false,
+    }
+}
+
+fn sse_stream(
+    stream: &mut TcpStream,
+    state: &Arc<Mutex<RendererState>>,
+    running: &Arc<AtomicBool>,
+) -> Result<()> {
+    stream.write_all(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: keep-alive\r\n\r\n",
+    )?;
+    stream.flush()?;
+    let mut last_cast: Option<crate::state::CastState> = None;
+    let mut last_history: Option<String> = None;
+    loop {
+        if !running.load(Ordering::Relaxed) {
+            break;
+        }
+        let cast = state.lock().map(|s| s.cast).ok();
+        if cast != last_cast {
+            last_cast = cast;
+            let running_now = cast == Some(crate::state::CastState::Running);
+            if !send_event(
+                stream,
+                "status",
+                &serde_json::json!({ "running": running_now }).to_string(),
+            ) {
+                break;
+            }
+        }
+        let entries_opt = read_history_file();
+        let payload = history_payload_from(entries_opt.as_deref().unwrap_or(&[]));
+        if Some(&payload) != last_history.as_ref() {
+            last_history = Some(payload.clone());
+            if !send_event(stream, "history", &payload) {
+                break;
+            }
+        }
+        if entries_opt.is_none() {
+            if let Ok(mut st) = state.lock() {
+                if !st.history.is_empty() {
+                    st.history.clear();
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    Ok(())
 }
 
 fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str) -> Result<()> {

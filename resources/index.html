@@ -34,8 +34,8 @@
     <section id="tab-settings">
       <div class="mb-6 flex items-center gap-3">
         <span class="inline-flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-sm">
-          <span class="h-2.5 w-2.5 rounded-full" style="background:{{INDICATOR_COLOR}}"></span>
-          <span class="text-slate-300">{{STATUS_LABEL}}: {{INDICATOR_TEXT}}</span>
+          <span id="status-dot" class="h-2.5 w-2.5 rounded-full" style="background:{{INDICATOR_COLOR}}"></span>
+          <span class="text-slate-300">{{STATUS_LABEL}}: <span id="status-text">{{INDICATOR_TEXT}}</span></span>
         </span>
       </div>
       <p class="mb-6 text-sm text-slate-400">{{SUBTITLE}}</p>
@@ -131,7 +131,9 @@
     data-title-col="{{TITLE_COL}}"
     data-saved="{{SAVED_MSG}}"
     data-save-err="{{SAVE_ERR_MSG}}"
-    data-status-label="{{STATUS_LABEL}}"></div>
+    data-status-label="{{STATUS_LABEL}}"
+    data-status-running="{{STATUS_RUNNING}}"
+    data-status-stopped="{{STATUS_STOPPED}}"></div>
 
   <script>
     (function () {
@@ -149,6 +151,8 @@
         saved: i18nEl.dataset.saved,
         saveErr: i18nEl.dataset.saveErr,
         statusLabel: i18nEl.dataset.statusLabel,
+        statusRunning: i18nEl.dataset.statusRunning,
+        statusStopped: i18nEl.dataset.statusStopped,
       };
 
       // Tabs
@@ -167,28 +171,34 @@
       tabs.forEach(function (b) { b.addEventListener('click', function () { activate(b.dataset.tab); }); });
       activate('settings');
 
-      // History
-      function renderHistory() {
-        fetch('/history').then(function (r) { return r.json(); }).then(function (d) {
-          var c = document.getElementById('history');
-          if (!d.entries || !d.entries.length) {
-            c.innerHTML = '<p class="text-slate-400">' + esc(I18N.historyEmpty) + '</p>';
-            return;
-          }
-          var rows = d.entries.map(function (e) {
-            return '<tr class="border-t border-slate-800">' +
-              '<td class="whitespace-nowrap py-2 pr-4 text-slate-400">' + esc(e.time) + '</td>' +
-              '<td class="py-2 text-slate-200" title="' + esc(e.uri) + '">' + esc(e.title) + '</td>' +
-              '</tr>';
-          }).join('');
-          c.innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-slate-400">' +
-            '<th class="py-2 pr-4 font-medium">' + esc(I18N.timeCol) + '</th>' +
-            '<th class="py-2 font-medium">' + esc(I18N.titleCol) + '</th></tr></thead>' +
-            '<tbody>' + rows + '</tbody></table>';
-        }).catch(function () {});
+      // History: one-time load for instant paint, then live updates via SSE
+      function applyHistory(d) {
+        var c = document.getElementById('history');
+        if (!d.entries || !d.entries.length) {
+          c.innerHTML = '<p class="text-slate-400">' + esc(I18N.historyEmpty) + '</p>';
+          return;
+        }
+        var rows = d.entries.map(function (e) {
+          return '<tr class="border-t border-slate-800">' +
+            '<td class="whitespace-nowrap py-2 pr-4 text-slate-400">' + esc(e.time) + '</td>' +
+            '<td class="py-2 text-slate-200" title="' + esc(e.uri) + '">' + esc(e.title) + '</td>' +
+            '</tr>';
+        }).join('');
+        c.innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-slate-400">' +
+          '<th class="py-2 pr-4 font-medium">' + esc(I18N.timeCol) + '</th>' +
+          '<th class="py-2 font-medium">' + esc(I18N.titleCol) + '</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody></table>';
       }
-      renderHistory();
-      setInterval(renderHistory, 3000);
+      fetch('/history').then(function (r) { return r.json(); }).then(applyHistory).catch(function () {});
+      var es = new EventSource('/events');
+      es.addEventListener('history', function (e) { applyHistory(JSON.parse(e.data)); });
+      es.addEventListener('status', function (e) {
+        var d = JSON.parse(e.data);
+        var dot = document.getElementById('status-dot');
+        var txt = document.getElementById('status-text');
+        if (dot) dot.style.background = d.running ? '#22c55e' : '#ef4444';
+        if (txt) txt.textContent = d.running ? I18N.statusRunning : I18N.statusStopped;
+      });
 
       // Save (fetch + toast)
       function showToast(ok, msg) {
