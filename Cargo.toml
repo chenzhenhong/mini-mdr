@@ -19,6 +19,9 @@ signal-hook = "0.3"
 toml = "0.8"
 unic-langid = "0.9"
 
+[build-dependencies]
+winresource = "0.1"
+
 [package.metadata.deb]
 name = "mini-mdr"
 maintainer = "chenzhenhong <2246467700@qq.com>"
