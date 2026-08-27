@@ -102,11 +102,16 @@ impl SettingsServer {
                 while active.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
-                            if let Err(error) =
-                                serve(&mut stream, address, &config, &state, &active)
-                            {
-                                crate::log_error!("settings request failed: {error:#}");
-                            }
+                            let config = Arc::clone(&config);
+                            let state = Arc::clone(&state);
+                            let active = Arc::clone(&active);
+                            thread::spawn(move || {
+                                if let Err(error) =
+                                    serve(&mut stream, address, &config, &state, &active)
+                                {
+                                    crate::log_error!("settings request failed: {error:#}");
+                                }
+                            });
                         }
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(50));
