@@ -1,8 +1,8 @@
 use crate::i18n::{Language, t};
 use anyhow::Result;
-use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig};
+use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig, TrayHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, OnceLock, mpsc};
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
@@ -11,6 +11,19 @@ pub const QUIT: u32 = 4;
 const TRAY_ICON_SIZE: u32 = 32;
 const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
     include_bytes!("../resources/icon.rgba");
+
+static TRAY_HANDLE: OnceLock<TrayHandle> = OnceLock::new();
+static CASTING: AtomicBool = AtomicBool::new(true);
+
+pub fn refresh_menu() {
+    if let Some(handle) = TRAY_HANDLE.get() {
+        let lang = crate::i18n::lang();
+        let casting = CASTING.load(Ordering::Relaxed);
+        if let Err(error) = handle.set_menu(menu(casting, lang)) {
+            crate::log_error!("refreshing tray menu: {error}");
+        }
+    }
+}
 
 fn menu(casting: bool, lang: Language) -> Menu {
     let toggle = t(lang, "tray-cast");
@@ -26,11 +39,11 @@ fn menu(casting: bool, lang: Language) -> Menu {
 pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
     let icon = tray_icon()?;
     let lang = crate::i18n::lang();
-    let mut casting = true;
+    CASTING.store(true, Ordering::Relaxed);
     let tray = match Tray::new(
         TrayConfig::new(icon)
             .tooltip("mini-mdr")
-            .menu(menu(casting, lang)),
+            .menu(menu(true, lang)),
     ) {
         Ok(tray) => tray,
         Err(error) => {
@@ -39,6 +52,7 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
         }
     };
     let handle = tray.handle();
+    let _ = TRAY_HANDLE.set(handle.clone());
 
     let quit_flag = Arc::new(AtomicBool::new(false));
     let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag));
@@ -64,7 +78,8 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
                 crate::log_error!("sending tray command: {error}");
             }
             if id.0 == TOGGLE_CAST {
-                casting = !casting;
+                let casting = !CASTING.load(Ordering::Relaxed);
+                CASTING.store(casting, Ordering::Relaxed);
                 if let Err(error) = handle.set_menu(menu(casting, crate::i18n::lang())) {
                     crate::log_error!("updating tray menu: {error}");
                 }

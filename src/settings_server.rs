@@ -424,6 +424,7 @@ fn update_config(
     guard.settings.language = language.to_owned();
     guard.save()?;
     crate::i18n::set_lang(crate::i18n::resolve_language(language));
+    crate::tray::refresh_menu();
     Ok(())
 }
 
