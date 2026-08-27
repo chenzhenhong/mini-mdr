@@ -221,7 +221,6 @@ fn serve(
                 ("SUBTITLE", subtitle.as_str()),
                 ("STATUS_LABEL", status_label.as_str()),
                 ("LABEL_LANGUAGE", label_language.as_str()),
-                ("LANGUAGE_OPTIONS", language_options_str.as_str()),
                 ("INDICATOR_COLOR", indicator_color),
                 ("INDICATOR_TEXT", indicator_text.as_str()),
                 ("STATUS_RUNNING", status_running.as_str()),
@@ -258,7 +257,8 @@ fn serve(
                 ("CONFIG_DIR", config_dir.as_str()),
                 ("VERSION", env!("CARGO_PKG_VERSION")),
             ];
-            let body = render(&load_template(), &vars);
+            let body = render(&load_template(), &vars)
+                .replace("{{LANGUAGE_OPTIONS}}", &language_options_str);
             respond(stream, "200 OK", "text/html; charset=utf-8", &body)
         }
         ("GET", "/history") => {
