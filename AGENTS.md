@@ -139,7 +139,7 @@ route — do not reintroduce inline SVG placeholders for the app icon.
 - **Do not** automatically bump the `Cargo.toml` version, create a tag, or
   trigger a release.
 - Only when the user explicitly says "release一下" (release it): bump the
-  `Cargo.toml` version to the next increment (current latest tag is `v0.2.16`),
+  `Cargo.toml` version to the next increment (current latest tag is `v0.2.17`),
   commit, create a `vX.Y.Z` tag, and `git push --tags`. CI builds the release
   automatically.
 - For normal feature/fix work, commit and `git push origin main` without a tag.
