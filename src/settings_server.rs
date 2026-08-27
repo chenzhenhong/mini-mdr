@@ -133,8 +133,19 @@ fn serve(
     state: &Arc<Mutex<RendererState>>,
     running: &Arc<AtomicBool>,
 ) -> Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-    let request = read_request(stream)?;
+    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    let request = match read_request(stream) {
+        Ok(req) => req,
+        Err(_) => {
+            let _ = respond(
+                stream,
+                "400 Bad Request",
+                "text/plain; charset=utf-8",
+                "400 Bad Request\n",
+            );
+            return Ok(());
+        }
+    };
     let first_line = request.lines().next().unwrap_or_default();
     let mut parts = first_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
