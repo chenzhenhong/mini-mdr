@@ -47,7 +47,7 @@ jobs:
         run: cp target/${{ matrix.target }}/release/mini-mdr.exe ${{ matrix.artifact }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload deb
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mini-mdr-linux-amd64.deb
           path: target/${{ matrix.target }}/debian/*.deb
@@ -97,7 +97,7 @@ jobs:
 
       - name: Upload dmg
         if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mini-mdr-macos-amd64.dmg
           path: mini-mdr-macos-amd64.dmg
@@ -106,12 +106,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           merge-multiple: true
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: mini-mdr-*
           generate_release_notes: true
