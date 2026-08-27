@@ -4,27 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{TITLE}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          colors: { brand: '#38bdf8' },
-          fontFamily: { sans: ['ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: { brand: '#2563eb' },
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
         },
       },
     };
   </script>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-200 antialiased">
-  <nav class="sticky top-0 z-20 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+<body class="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased">
+  <nav class="sticky top-0 z-20 border-b border-gray-200 bg-white shadow-sm">
     <div class="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-      <div class="text-lg font-extrabold uppercase tracking-[0.25em] text-slate-100">MINI-MDR</div>
+      <div class="flex items-center gap-2">
+        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+        <span class="text-base font-semibold text-gray-900">mini-mdr</span>
+      </div>
       <div class="flex gap-1 text-sm">
-        <button data-tab="settings" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_SETTINGS}}</button>
-        <button data-tab="history" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_HISTORY}}</button>
-        <button data-tab="guide" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_GUIDE}}</button>
-        <button data-tab="about" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_ABOUT}}</button>
+        <button data-tab="settings" class="border-b-2 border-transparent px-3 py-4 font-medium text-gray-500 transition hover:text-gray-900">{{TAB_SETTINGS}}</button>
+        <button data-tab="history" class="border-b-2 border-transparent px-3 py-4 font-medium text-gray-500 transition hover:text-gray-900">{{TAB_HISTORY}}</button>
+        <button data-tab="guide" class="border-b-2 border-transparent px-3 py-4 font-medium text-gray-500 transition hover:text-gray-900">{{TAB_GUIDE}}</button>
+        <button data-tab="about" class="border-b-2 border-transparent px-3 py-4 font-medium text-gray-500 transition hover:text-gray-900">{{TAB_ABOUT}}</button>
       </div>
     </div>
   </nav>
@@ -33,92 +41,152 @@
     <!-- Settings -->
     <section id="tab-settings">
       <div class="mb-6 flex items-center gap-3">
-        <span class="inline-flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-sm">
+        <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm text-gray-700">
           <span id="status-dot" class="h-2.5 w-2.5 rounded-full" style="background:{{INDICATOR_COLOR}}"></span>
-          <span class="text-slate-300">{{STATUS_LABEL}}: <span id="status-text">{{INDICATOR_TEXT}}</span></span>
+          <span>{{STATUS_LABEL}}: <span id="status-text">{{INDICATOR_TEXT}}</span></span>
         </span>
       </div>
-      <p class="mb-6 text-sm text-slate-400">{{SUBTITLE}}</p>
-      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
-        <h2 class="mb-4 text-base font-semibold text-slate-100">{{SETTINGS_HEADING}}</h2>
-        <form id="settings-form" method="post" action="/settings" class="space-y-4">
+      <p class="mb-6 text-sm text-gray-500">{{SUBTITLE}}</p>
+      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 class="mb-5 text-base font-semibold text-gray-900">{{SETTINGS_HEADING}}</h2>
+        <form id="settings-form" method="post" action="/settings" class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <div>
-            <label for="device_name" class="mb-1.5 block text-sm text-slate-400">{{LABEL_NAME}}</label>
-            <input id="device_name" name="device_name" maxlength="128" required
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
-              value="{{DEVICE_NAME}}">
+            <label for="device_name" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_NAME}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              </span>
+              <input id="device_name" name="device_name" maxlength="128" required
+                class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                value="{{DEVICE_NAME}}">
+            </div>
           </div>
           <div>
-            <label for="language" class="mb-1.5 block text-sm text-slate-400">{{LABEL_LANGUAGE}}</label>
-            <select id="language" name="language"
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500">
-              {{LANGUAGE_OPTIONS}}
-            </select>
+            <label for="language" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_LANGUAGE}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+              </span>
+              <select id="language" name="language"
+                class="w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500">
+                {{LANGUAGE_OPTIONS}}
+              </select>
+            </div>
           </div>
           <div>
-            <label for="backend" class="mb-1.5 block text-sm text-slate-400">{{LABEL_BACKEND}}</label>
-            <select id="backend" name="backend"
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500">
-              <option value="mpv" selected>mpv</option>
-            </select>
+            <label for="backend" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_BACKEND}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+              </span>
+              <select id="backend" name="backend"
+                class="w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500">
+                <option value="mpv" selected>mpv</option>
+              </select>
+            </div>
           </div>
           <div>
-            <label for="mpv_path" class="mb-1.5 block text-sm text-slate-400">{{LABEL_MPV_PATH}}</label>
-            <input id="mpv_path" name="mpv_path" required
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
-              value="{{MPV_PATH}}">
+            <label for="mpv_path" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_MPV_PATH}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              </span>
+              <input id="mpv_path" name="mpv_path" required
+                class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                value="{{MPV_PATH}}">
+            </div>
           </div>
-          <div>
-            <label for="max_history" class="mb-1.5 block text-sm text-slate-400">{{LABEL_MAX_HISTORY}}</label>
-            <input id="max_history" name="max_history" type="number" min="1" max="10000" required
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
-              value="{{MAX_HISTORY}}">
+          <div class="sm:col-span-2">
+            <label for="max_history" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_MAX_HISTORY}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+              </span>
+              <input id="max_history" name="max_history" type="number" min="1" max="10000" required
+                class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                value="{{MAX_HISTORY}}">
+            </div>
           </div>
-          <button type="submit"
-            class="inline-flex items-center rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400">{{SAVE_BTN}}</button>
+          <div class="sm:col-span-2 flex items-center gap-3">
+            <button type="submit"
+              class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+              {{SAVE_BTN}}
+            </button>
+            <span class="inline-flex items-center gap-1.5 text-sm text-gray-400">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+              {{SETTINGS_HINT}}
+            </span>
+          </div>
         </form>
       </div>
     </section>
 
     <!-- History -->
     <section id="tab-history" class="hidden">
-      <h2 class="mb-4 text-base font-semibold text-slate-100">{{HISTORY_HEADING}}</h2>
-      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
-        <div id="history"><p class="text-slate-400">{{HISTORY_EMPTY}}</p></div>
+      <p class="mb-6 text-sm text-gray-500">{{HISTORY_SUBTITLE}}</p>
+      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div id="history" class="flex flex-col items-center justify-center py-12 text-center">
+          <span class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 text-gray-300">
+            <svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </span>
+          <p class="font-semibold text-gray-900">{{HISTORY_EMPTY}}</p>
+          <p class="mt-1 text-sm text-gray-400">{{HISTORY_EMPTY_SUB}}</p>
+        </div>
       </div>
     </section>
 
     <!-- Guide -->
     <section id="tab-guide" class="hidden">
-      <h2 class="mb-4 text-base font-semibold text-slate-100">{{GUIDE_TITLE}}</h2>
-      <div class="space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm leading-relaxed text-slate-300 shadow-sm">
+      <h2 class="mb-4 text-base font-semibold text-gray-900">{{GUIDE_TITLE}}</h2>
+      <div class="space-y-5 rounded-xl border border-gray-200 bg-white p-6 text-sm leading-relaxed text-gray-600 shadow-sm">
         <p>{{GUIDE_INTRO}}</p>
         <div>
-          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_PLAYER_HEADING}}</h3>
-          <p class="text-slate-400">{{GUIDE_PLAYER_TEXT}}</p>
+          <h3 class="mb-1 font-medium text-gray-900">{{GUIDE_PLAYER_HEADING}}</h3>
+          <p class="text-gray-500">{{GUIDE_PLAYER_TEXT}}</p>
         </div>
         <div>
-          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_CONFIG_HEADING}}</h3>
-          <p class="text-slate-400">{{GUIDE_CONFIG_TEXT}}</p>
-          <pre class="mt-2 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-slate-200">{{CONFIG_DIR}}</pre>
+          <h3 class="mb-1 font-medium text-gray-900">{{GUIDE_CONFIG_HEADING}}</h3>
+          <p class="text-gray-500">{{GUIDE_CONFIG_TEXT}}</p>
+          <pre class="mt-2 overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-800">{{CONFIG_DIR}}</pre>
         </div>
         <div>
-          <h3 class="mb-1 font-medium text-slate-100">{{GUIDE_USAGE_HEADING}}</h3>
-          <p class="text-slate-400">{{GUIDE_USAGE_TEXT}}</p>
+          <h3 class="mb-1 font-medium text-gray-900">{{GUIDE_USAGE_HEADING}}</h3>
+          <p class="text-gray-500">{{GUIDE_USAGE_TEXT}}</p>
         </div>
       </div>
     </section>
 
     <!-- About -->
     <section id="tab-about" class="hidden">
-      <h2 class="mb-4 text-base font-semibold text-slate-100">{{ABOUT_TITLE}}</h2>
-      <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm leading-relaxed text-slate-300 shadow-sm">
-        <p>{{ABOUT_DESC}}</p>
-        <p class="text-slate-400">Version: <span class="font-medium text-slate-200">v{{VERSION}}</span></p>
-        <p class="text-slate-400">Repository:
-          <a class="text-sky-400 hover:underline" href="https://github.com/chenzhenhong/mini-mdr" target="_blank" rel="noopener">github.com/chenzhenhong/mini-mdr</a>
-        </p>
-        <p class="text-slate-400">License: MIT</p>
+      <p class="mb-6 text-sm text-gray-500">{{ABOUT_SUBTITLE}}</p>
+      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div class="flex items-start gap-5">
+          <span class="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+          <div class="min-w-0">
+            <h3 class="text-lg font-semibold text-gray-900">{{TITLE}}</h3>
+            <p class="mt-1 text-sm text-gray-500">{{ABOUT_DESC}}</p>
+          </div>
+        </div>
+        <dl class="mt-6 space-y-3 border-t border-gray-100 pt-5 text-sm">
+          <div class="flex items-center gap-3 text-gray-600">
+            <svg class="h-4 w-4 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L3 13V4h9l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+            <dt class="w-24 flex-shrink-0 text-gray-400">Version</dt>
+            <dd class="font-medium text-gray-900">v{{VERSION}}</dd>
+          </div>
+          <div class="flex items-center gap-3 text-gray-600">
+            <svg class="h-4 w-4 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-1-2.6c3-.3 6-1.5 6-6.6a5 5 0 0 0-1.4-3.5 4.7 4.7 0 0 0-.1-3.5S16.6.5 13 2.6a13 13 0 0 0-6 0C3.4.5 2.5 1.5 2.5 1.5a4.7 4.7 0 0 0-.1 3.5A5 5 0 0 0 1 8.5c0 5 3 6.3 6 6.6a3.4 3.4 0 0 0-1 2.6V21"/></svg>
+            <dt class="w-24 flex-shrink-0 text-gray-400">Repository</dt>
+            <dd><a class="text-blue-600 hover:underline" href="https://github.com/chenzhenhong/mini-mdr" target="_blank" rel="noopener">github.com/chenzhenhong/mini-mdr</a></dd>
+          </div>
+          <div class="flex items-center gap-3 text-gray-600">
+            <svg class="h-4 w-4 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+            <dt class="w-24 flex-shrink-0 text-gray-400">License</dt>
+            <dd class="font-medium text-gray-900">MIT</dd>
+          </div>
+        </dl>
       </div>
     </section>
   </main>
@@ -127,6 +195,7 @@
 
   <div id="i18n" class="hidden"
     data-history-empty="{{HISTORY_EMPTY}}"
+    data-history-empty-sub="{{HISTORY_EMPTY_SUB}}"
     data-time-col="{{TIME_COL}}"
     data-title-col="{{TITLE_COL}}"
     data-saved="{{SAVED_MSG}}"
@@ -146,6 +215,7 @@
       var i18nEl = document.getElementById('i18n');
       var I18N = {
         historyEmpty: i18nEl.dataset.historyEmpty,
+        historyEmptySub: i18nEl.dataset.historyEmptySub,
         timeCol: i18nEl.dataset.timeCol,
         titleCol: i18nEl.dataset.titleCol,
         saved: i18nEl.dataset.saved,
@@ -160,9 +230,10 @@
       function activate(name) {
         tabs.forEach(function (b) {
           var active = b.dataset.tab === name;
-          b.classList.toggle('bg-slate-800', active);
-          b.classList.toggle('text-white', active);
-          b.classList.toggle('text-slate-400', !active);
+          b.classList.toggle('text-blue-600', active);
+          b.classList.toggle('border-blue-600', active);
+          b.classList.toggle('text-gray-500', !active);
+          b.classList.toggle('border-transparent', !active);
         });
         ['settings', 'history', 'guide', 'about'].forEach(function (n) {
           document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
@@ -175,16 +246,22 @@
       function applyHistory(d) {
         var c = document.getElementById('history');
         if (!d.entries || !d.entries.length) {
-          c.innerHTML = '<p class="text-slate-400">' + esc(I18N.historyEmpty) + '</p>';
+          c.className = 'flex flex-col items-center justify-center py-12 text-center';
+          c.innerHTML =
+            '<span class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 text-gray-300">' +
+            '<svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
+            '<p class="font-semibold text-gray-900">' + esc(I18N.historyEmpty) + '</p>' +
+            '<p class="mt-1 text-sm text-gray-400">' + esc(I18N.historyEmptySub) + '</p>';
           return;
         }
         var rows = d.entries.map(function (e) {
-          return '<tr class="border-t border-slate-800">' +
-            '<td class="whitespace-nowrap py-2 pr-4 text-slate-400">' + esc(e.time) + '</td>' +
-            '<td class="py-2 text-slate-200" title="' + esc(e.uri) + '">' + esc(e.title) + '</td>' +
+          return '<tr class="border-t border-gray-100">' +
+            '<td class="whitespace-nowrap py-2.5 pr-4 text-gray-500">' + esc(e.time) + '</td>' +
+            '<td class="py-2.5 text-gray-900" title="' + esc(e.uri) + '">' + esc(e.title) + '</td>' +
             '</tr>';
         }).join('');
-        c.innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-slate-400">' +
+        c.className = '';
+        c.innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-gray-400">' +
           '<th class="py-2 pr-4 font-medium">' + esc(I18N.timeCol) + '</th>' +
           '<th class="py-2 font-medium">' + esc(I18N.titleCol) + '</th></tr></thead>' +
           '<tbody>' + rows + '</tbody></table>';

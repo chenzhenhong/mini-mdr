@@ -18,8 +18,11 @@ settings-section-history = 历史记录
 settings-history-time = 时间
 settings-history-title = 标题
 settings-history-empty = 暂无历史记录
+settings-history-empty-sub = 您的播放历史将在这里显示。
+settings-history-subtitle = 查看最近播放的媒体历史。
 settings-max-history = 最大历史记录数
 settings-status = 状态
+settings-hint = 更改将立即生效。
 
 # Tabs
 tab-settings = 设置
@@ -29,6 +32,7 @@ tab-guide = 教程
 
 # About page
 about-title = 关于
+about-subtitle = 了解更多关于 mini-mdr 的信息。
 about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 播放媒体。
 
 # Guide page

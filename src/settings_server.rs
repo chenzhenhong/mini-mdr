@@ -185,11 +185,15 @@ fn serve(
             let save_btn = t(lang, "settings-save");
             let history_heading = t(lang, "settings-section-history");
             let history_empty = t(lang, "settings-history-empty");
+            let history_empty_sub = t(lang, "settings-history-empty-sub");
+            let history_subtitle = t(lang, "settings-history-subtitle");
+            let settings_hint = t(lang, "settings-hint");
             let time_col = t(lang, "settings-history-time");
             let title_col = t(lang, "settings-history-title");
             let saved_msg = t(lang, "settings-saved");
             let save_err_msg = t(lang, "error-save-failed");
             let about_title = t(lang, "about-title");
+            let about_subtitle = t(lang, "about-subtitle");
             let about_desc = t(lang, "about-description");
             let label_language = t(lang, "settings-language");
             let language_options_str = language_options(lang, &config.settings.language);
@@ -221,6 +225,7 @@ fn serve(
                 ("STATUS_RUNNING", status_running.as_str()),
                 ("STATUS_STOPPED", status_stopped.as_str()),
                 ("SETTINGS_HEADING", settings_heading.as_str()),
+                ("SETTINGS_HINT", settings_hint.as_str()),
                 ("LABEL_NAME", label_name.as_str()),
                 ("LABEL_BACKEND", label_backend.as_str()),
                 ("LABEL_MPV_PATH", label_mpv_path.as_str()),
@@ -231,11 +236,14 @@ fn serve(
                 ("SAVE_BTN", save_btn.as_str()),
                 ("HISTORY_HEADING", history_heading.as_str()),
                 ("HISTORY_EMPTY", history_empty.as_str()),
+                ("HISTORY_EMPTY_SUB", history_empty_sub.as_str()),
+                ("HISTORY_SUBTITLE", history_subtitle.as_str()),
                 ("TIME_COL", time_col.as_str()),
                 ("TITLE_COL", title_col.as_str()),
                 ("SAVED_MSG", saved_msg.as_str()),
                 ("SAVE_ERR_MSG", save_err_msg.as_str()),
                 ("ABOUT_TITLE", about_title.as_str()),
+                ("ABOUT_SUBTITLE", about_subtitle.as_str()),
                 ("ABOUT_DESC", about_desc.as_str()),
                 ("GUIDE_TITLE", guide_title.as_str()),
                 ("GUIDE_INTRO", guide_intro.as_str()),

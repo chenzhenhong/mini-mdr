@@ -18,8 +18,11 @@ settings-section-history = History
 settings-history-time = Time
 settings-history-title = Title
 settings-history-empty = No history yet
+settings-history-empty-sub = Your played media history will appear here.
+settings-history-subtitle = View your recently played media history.
 settings-max-history = Max History Entries
 settings-status = Status
+settings-hint = Changes will be applied immediately.
 
 # Tabs
 tab-settings = Settings
@@ -29,6 +32,7 @@ tab-guide = Guide
 
 # About page
 about-title = About
+about-subtitle = Learn more about mini-mdr.
 about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv.
 
 # Guide page
