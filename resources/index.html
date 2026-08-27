@@ -291,7 +291,7 @@
         });
         c.querySelectorAll('.open-in-browser').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            window.open(btn.dataset.uri, '_blank');
+            window.open(btn.dataset.uri, '_blank', 'noopener,noreferrer');
           });
         });
       }

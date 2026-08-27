@@ -124,7 +124,16 @@ fn serve(
     max_history: usize,
 ) -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(3)))?;
-    let request = read_request(stream)?;
+    let request = match read_request(stream) {
+        Ok(req) => req,
+        Err(error) => {
+            let msg = error.to_string();
+            if msg.contains("connection closed") || msg.contains("incomplete") {
+                return Ok(());
+            }
+            return Err(error);
+        }
+    };
     let response = route(&request, name, player, state, subscriptions, max_history);
     write_response(stream, response)
 }
@@ -694,7 +703,7 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
     loop {
         let size = stream.read(&mut chunk)?;
         if size == 0 {
-            break;
+            anyhow::bail!("connection closed before headers complete");
         }
         data.extend_from_slice(&chunk[..size]);
         if data.len() > MAX_REQUEST_SIZE {
