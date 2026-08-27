@@ -1,6 +1,6 @@
 # Tray menu
 tray-cast = Cast
-tray-open-settings = Open Settings
+tray-more = More
 tray-quit = Quit
 
 # Settings page

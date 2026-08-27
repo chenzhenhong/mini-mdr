@@ -14,7 +14,7 @@ const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
 
 fn menu(casting: bool, lang: Language) -> Menu {
     let toggle = t(lang, "tray-cast");
-    let settings = t(lang, "tray-open-settings");
+    let settings = t(lang, "tray-more");
     let quit = t(lang, "tray-quit");
     Menu::new()
         .item(MenuItem::checkbox(TOGGLE_CAST, toggle, casting))
