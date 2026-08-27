@@ -1,6 +1,6 @@
 [package]
 name = "mini-mdr"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2024"
 description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
 license = "MIT"
