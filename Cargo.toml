@@ -1,6 +1,6 @@
 [package]
 name = "mini-mdr"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
 license = "MIT"
@@ -21,6 +21,9 @@ unic-langid = "0.9"
 
 [build-dependencies]
 winresource = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
 
 [package.metadata.deb]
 name = "mini-mdr"

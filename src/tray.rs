@@ -11,13 +11,14 @@ fn is_casting(state: &Arc<Mutex<RendererState>>) -> bool {
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
-pub const QUIT: u32 = 3;
+pub const AUTOSTART: u32 = 3;
+pub const QUIT: u32 = 4;
 
 const TRAY_ICON_SIZE: u32 = 32;
 const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
     include_bytes!("../resources/icon.rgba");
 
-fn menu(casting: bool, lang: Language) -> Menu {
+fn menu(casting: bool, autostart: bool, lang: Language) -> Menu {
     let key = if casting {
         "tray-stop-cast"
     } else {
@@ -25,10 +26,12 @@ fn menu(casting: bool, lang: Language) -> Menu {
     };
     let toggle = t(lang, key);
     let settings = t(lang, "tray-open-settings");
+    let autostart_label = t(lang, "tray-autostart");
     let quit = t(lang, "tray-quit");
     Menu::new()
         .item(MenuItem::checkbox(TOGGLE_CAST, toggle, casting))
         .item(MenuItem::button(OPEN_SETTINGS, settings))
+        .item(MenuItem::checkbox(AUTOSTART, autostart_label, autostart))
         .item(MenuItem::button(QUIT, quit))
 }
 
@@ -36,10 +39,11 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>, state: Arc<Mutex<RendererS
     let icon = tray_icon()?;
     let lang = crate::i18n::lang();
     let mut casting = is_casting(&state);
+    let mut autostart = crate::autostart::is_enabled();
     let tray = match Tray::new(
         TrayConfig::new(icon)
             .tooltip("mini-mdr")
-            .menu(menu(casting, lang)),
+            .menu(menu(casting, autostart, lang)),
     ) {
         Ok(tray) => tray,
         Err(error) => {
@@ -66,6 +70,7 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>, state: Arc<Mutex<RendererS
             let command = match id.0 {
                 TOGGLE_CAST => crate::app::Command::ToggleCast,
                 OPEN_SETTINGS => crate::app::Command::OpenSettings,
+                AUTOSTART => crate::app::Command::ToggleAutostart,
                 QUIT => crate::app::Command::Quit,
                 _ => return,
             };
@@ -74,7 +79,13 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>, state: Arc<Mutex<RendererS
             }
             if id.0 == TOGGLE_CAST {
                 casting = !casting;
-                if let Err(error) = handle.set_menu(menu(casting, lang)) {
+                if let Err(error) = handle.set_menu(menu(casting, autostart, lang)) {
+                    crate::log_error!("updating tray menu: {error}");
+                }
+            }
+            if id.0 == AUTOSTART {
+                autostart = !autostart;
+                if let Err(error) = handle.set_menu(menu(casting, autostart, lang)) {
                     crate::log_error!("updating tray menu: {error}");
                 }
             }

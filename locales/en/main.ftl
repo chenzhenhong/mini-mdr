@@ -2,6 +2,7 @@
 tray-start-cast = Start Cast
 tray-stop-cast = Stop Cast
 tray-open-settings = Open Settings
+tray-autostart = Auto-start
 tray-quit = Quit
 
 # Settings page

@@ -2,6 +2,7 @@
 tray-start-cast = 开始 Cast
 tray-stop-cast = 停止 Cast
 tray-open-settings = 打开设置
+tray-autostart = 开机启动
 tray-quit = 退出程序
 
 # Settings page
