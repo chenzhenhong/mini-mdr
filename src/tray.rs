@@ -19,12 +19,7 @@ const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
     include_bytes!("../resources/icon.rgba");
 
 fn menu(casting: bool, autostart: bool, lang: Language) -> Menu {
-    let key = if casting {
-        "tray-stop-cast"
-    } else {
-        "tray-start-cast"
-    };
-    let toggle = t(lang, key);
+    let toggle = t(lang, "tray-cast");
     let settings = t(lang, "tray-open-settings");
     let autostart_label = t(lang, "tray-autostart");
     let quit = t(lang, "tray-quit");
