@@ -18,6 +18,16 @@ settings-history-time = Time
 settings-history-title = Title
 settings-history-empty = No history yet
 settings-max-history = Max History Entries
+settings-status = Status
+
+# Tabs
+tab-settings = Settings
+tab-history = History
+tab-about = About
+
+# About page
+about-title = About
+about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv.
 
 # Validation errors
 error-save-failed = Save failed

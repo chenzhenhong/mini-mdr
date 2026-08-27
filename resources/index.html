@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="{{HTML_LANG}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: '#38bdf8' },
+          fontFamily: { sans: ['ui-sans-serif', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-200 antialiased">
+  <nav class="sticky top-0 z-20 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+    <div class="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+      <div class="text-lg font-extrabold uppercase tracking-[0.25em] text-slate-100">MINI-MDR</div>
+      <div class="flex gap-1 text-sm">
+        <button data-tab="settings" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_SETTINGS}}</button>
+        <button data-tab="history" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_HISTORY}}</button>
+        <button data-tab="about" class="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200">{{TAB_ABOUT}}</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="mx-auto max-w-3xl px-4 py-8">
+    <!-- Settings -->
+    <section id="tab-settings">
+      <div class="mb-6 flex items-center gap-3">
+        <span class="inline-flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-sm">
+          <span class="h-2.5 w-2.5 rounded-full" style="background:{{INDICATOR_COLOR}}"></span>
+          <span class="text-slate-300">{{STATUS_LABEL}}: {{INDICATOR_TEXT}}</span>
+        </span>
+      </div>
+      <p class="mb-6 text-sm text-slate-400">{{SUBTITLE}}</p>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+        <h2 class="mb-4 text-base font-semibold text-slate-100">{{SETTINGS_HEADING}}</h2>
+        <form id="settings-form" method="post" action="/settings" class="space-y-4">
+          <div>
+            <label for="device_name" class="mb-1.5 block text-sm text-slate-400">{{LABEL_NAME}}</label>
+            <input id="device_name" name="device_name" maxlength="128" required
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
+              value="{{DEVICE_NAME}}">
+          </div>
+          <div>
+            <label for="backend" class="mb-1.5 block text-sm text-slate-400">{{LABEL_BACKEND}}</label>
+            <select id="backend" name="backend"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500">
+              <option value="mpv" selected>mpv</option>
+            </select>
+          </div>
+          <div>
+            <label for="mpv_path" class="mb-1.5 block text-sm text-slate-400">{{LABEL_MPV_PATH}}</label>
+            <input id="mpv_path" name="mpv_path" required
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
+              value="{{MPV_PATH}}">
+          </div>
+          <div>
+            <label for="max_history" class="mb-1.5 block text-sm text-slate-400">{{LABEL_MAX_HISTORY}}</label>
+            <input id="max_history" name="max_history" type="number" min="1" max="10000" required
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
+              value="{{MAX_HISTORY}}">
+          </div>
+          <button type="submit"
+            class="inline-flex items-center rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400">{{SAVE_BTN}}</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section id="tab-history" class="hidden">
+      <h2 class="mb-4 text-base font-semibold text-slate-100">{{HISTORY_HEADING}}</h2>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+        <div id="history"><p class="text-slate-400">{{HISTORY_EMPTY}}</p></div>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section id="tab-about" class="hidden">
+      <h2 class="mb-4 text-base font-semibold text-slate-100">{{ABOUT_TITLE}}</h2>
+      <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm leading-relaxed text-slate-300 shadow-sm">
+        <p>{{ABOUT_DESC}}</p>
+        <p class="text-slate-400">Version: <span class="font-medium text-slate-200">v{{VERSION}}</span></p>
+        <p class="text-slate-400">Repository:
+          <a class="text-sky-400 hover:underline" href="https://github.com/chenzhenhong/mini-mdr" target="_blank" rel="noopener">github.com/chenzhenhong/mini-mdr</a>
+        </p>
+        <p class="text-slate-400">License: MIT</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm text-white shadow-lg"></div>
+
+  <div id="i18n" class="hidden"
+    data-history-empty="{{HISTORY_EMPTY}}"
+    data-time-col="{{TIME_COL}}"
+    data-title-col="{{TITLE_COL}}"
+    data-saved="{{SAVED_MSG}}"
+    data-save-err="{{SAVE_ERR_MSG}}"
+    data-status-label="{{STATUS_LABEL}}"></div>
+
+  <script>
+    (function () {
+      function esc(s) {
+        return (s == null ? '' : String(s)).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      var i18nEl = document.getElementById('i18n');
+      var I18N = {
+        historyEmpty: i18nEl.dataset.historyEmpty,
+        timeCol: i18nEl.dataset.timeCol,
+        titleCol: i18nEl.dataset.titleCol,
+        saved: i18nEl.dataset.saved,
+        saveErr: i18nEl.dataset.saveErr,
+        statusLabel: i18nEl.dataset.statusLabel,
+      };
+
+      // Tabs
+      var tabs = document.querySelectorAll('[data-tab]');
+      function activate(name) {
+        tabs.forEach(function (b) {
+          var active = b.dataset.tab === name;
+          b.classList.toggle('bg-slate-800', active);
+          b.classList.toggle('text-white', active);
+          b.classList.toggle('text-slate-400', !active);
+        });
+        ['settings', 'history', 'about'].forEach(function (n) {
+          document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
+        });
+      }
+      tabs.forEach(function (b) { b.addEventListener('click', function () { activate(b.dataset.tab); }); });
+      activate('settings');
+
+      // History
+      function renderHistory() {
+        fetch('/history').then(function (r) { return r.json(); }).then(function (d) {
+          var c = document.getElementById('history');
+          if (!d.entries || !d.entries.length) {
+            c.innerHTML = '<p class="text-slate-400">' + esc(I18N.historyEmpty) + '</p>';
+            return;
+          }
+          var rows = d.entries.map(function (e) {
+            return '<tr class="border-t border-slate-800">' +
+              '<td class="whitespace-nowrap py-2 pr-4 text-slate-400">' + esc(e.time) + '</td>' +
+              '<td class="py-2 text-slate-200" title="' + esc(e.uri) + '">' + esc(e.title) + '</td>' +
+              '</tr>';
+          }).join('');
+          c.innerHTML = '<table class="w-full text-sm"><thead><tr class="text-left text-slate-400">' +
+            '<th class="py-2 pr-4 font-medium">' + esc(I18N.timeCol) + '</th>' +
+            '<th class="py-2 font-medium">' + esc(I18N.titleCol) + '</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table>';
+        }).catch(function () {});
+      }
+      renderHistory();
+      setInterval(renderHistory, 3000);
+
+      // Save (fetch + toast)
+      function showToast(ok, msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm text-white shadow-lg ' +
+          (ok ? 'bg-emerald-600' : 'bg-rose-600');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(function () { t.classList.add('hidden'); }, 3500);
+      }
+      document.getElementById('settings-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var data = new URLSearchParams(new FormData(e.target));
+        fetch('/settings', { method: 'post', body: data })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { showToast(d.ok, d.message); })
+          .catch(function () { showToast(false, I18N.saveErr); });
+      });
+    })();
+  </script>
+</body>
+</html>

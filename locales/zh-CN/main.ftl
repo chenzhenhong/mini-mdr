@@ -18,6 +18,16 @@ settings-history-time = 时间
 settings-history-title = 标题
 settings-history-empty = 暂无历史记录
 settings-max-history = 最大历史记录数
+settings-status = 状态
+
+# Tabs
+tab-settings = 设置
+tab-history = 历史
+tab-about = 关于
+
+# About page
+about-title = 关于
+about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 播放媒体。
 
 # Validation errors
 error-save-failed = 保存失败
