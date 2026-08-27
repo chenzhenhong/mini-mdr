@@ -21,5 +21,6 @@ use config::Config;
 fn main() -> Result<()> {
     i18n::detect();
     let config = Config::load()?;
+    i18n::set_lang(i18n::resolve_language(&config.settings.language));
     App::new(config)?.run()
 }

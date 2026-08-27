@@ -65,7 +65,7 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
             }
             if id.0 == TOGGLE_CAST {
                 casting = !casting;
-                if let Err(error) = handle.set_menu(menu(casting, lang)) {
+                if let Err(error) = handle.set_menu(menu(casting, crate::i18n::lang())) {
                     crate::log_error!("updating tray menu: {error}");
                 }
             }
