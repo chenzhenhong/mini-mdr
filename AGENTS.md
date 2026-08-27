@@ -131,6 +131,14 @@ route — do not reintroduce inline SVG placeholders for the app icon.
 - Do not commit any `.rs` file that has not been run through `cargo fmt --all`.
 - Recommended flow: edit → `cargo fmt --all` → `git add -A` → `git commit` →
   `git push`.
+- **`Cargo.lock` must stay in sync with `Cargo.toml`.** After any change to
+  `Cargo.toml` (version bump, add/remove/change a dependency), run
+  `cargo check` or `cargo update -p mini-mdr` to regenerate the lockfile, then
+  commit `Cargo.lock` alongside the `.toml` change. A stale lockfile causes AUR
+  builds to fail with `--locked`.
+- **AUR PKGBUILD uses `--locked`, not `--frozen`.** `--frozen` requires all
+  crate sources to be pre-cached locally and fails in clean chroot builds.
+  `--locked` respects the lockfile but allows cargo to download missing crates.
 
 ### Release discipline
 
