@@ -93,9 +93,7 @@ impl App {
         self.player = Some(player);
         self.cast = Some((upnp, ssdp));
         let upnp_port = self.cast.as_ref().map(|(u, _)| u.port()).unwrap_or(0);
-        let upnp_addr = crate::ssdp::local_ip()
-            .map(|ip| format!("http://{ip}:{upnp_port}"))
-            .ok();
+        let upnp_addr = crate::ssdp::local_ip().map(|ip| format!("http://{ip}:{upnp_port}"));
         {
             let mut state = lock(&self.state)?;
             state.cast = crate::state::CastState::Running;

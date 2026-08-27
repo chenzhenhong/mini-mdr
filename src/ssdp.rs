@@ -169,14 +169,13 @@ fn header<'a>(request: &'a str, target: &str) -> Option<&'a str> {
     })
 }
 
-pub fn local_ip() -> std::result::Result<IpAddr, std::net::AddrParseError> {
+pub fn local_ip() -> Option<IpAddr> {
     UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
         .ok()
         .and_then(|socket| {
             socket.connect((Ipv4Addr::new(192, 0, 2, 1), 80)).ok()?;
             Some(socket.local_addr().ok()?.ip())
         })
-        .ok_or_else(|| "127.0.0.1".parse::<IpAddr>().unwrap())
 }
 
 impl Drop for SsdpServer {
