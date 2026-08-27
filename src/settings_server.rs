@@ -12,7 +12,7 @@ use std::{
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Sender, Receiver, RecvTimeoutError},
+        mpsc::{Receiver, RecvTimeoutError, Sender, channel},
     },
     thread,
     time::Duration,
@@ -102,7 +102,9 @@ impl SettingsServer {
                 while active.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
-                            if let Err(error) = serve(&mut stream, address, &config, &state, &active) {
+                            if let Err(error) =
+                                serve(&mut stream, address, &config, &state, &active)
+                            {
                                 crate::log_error!("settings request failed: {error:#}");
                             }
                         }
@@ -453,7 +455,11 @@ fn language_options(lang: Language, current: &str) -> String {
         out.push_str(&format!(
             "<option value=\"{}\"{}>{}</option>",
             escape_html(info.code),
-            if info.code == current { " selected" } else { "" },
+            if info.code == current {
+                " selected"
+            } else {
+                ""
+            },
             escape_html(info.name),
         ));
     }

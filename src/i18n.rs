@@ -35,12 +35,23 @@ pub struct LanguageInfo {
 /// All UI languages. Add a new entry here plus a matching `locales/<code>/main.ftl`
 /// to introduce a language; no settings-page code needs to change.
 pub const LANGUAGES: &[LanguageInfo] = &[
-    LanguageInfo { code: "en", language: Language::En, name: "English" },
-    LanguageInfo { code: "zh-CN", language: Language::Zh, name: "中文" },
+    LanguageInfo {
+        code: "en",
+        language: Language::En,
+        name: "English",
+    },
+    LanguageInfo {
+        code: "zh-CN",
+        language: Language::Zh,
+        name: "中文",
+    },
 ];
 
 pub fn language_from_code(code: &str) -> Option<Language> {
-    LANGUAGES.iter().find(|l| l.code == code).map(|l| l.language)
+    LANGUAGES
+        .iter()
+        .find(|l| l.code == code)
+        .map(|l| l.language)
 }
 
 /// Resolves a stored language code to a `Language`. An empty code means "follow
