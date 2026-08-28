@@ -7,12 +7,12 @@ mod config;
 mod i18n;
 mod log;
 mod player;
-mod settings_server;
 mod ssdp;
 mod state;
 mod tray;
 mod upnp;
 mod util;
+mod web;
 
 use anyhow::Result;
 use app::App;

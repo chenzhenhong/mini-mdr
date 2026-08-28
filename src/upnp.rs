@@ -19,7 +19,6 @@ const DEVICE_DESCRIPTION: &str = include_str!("../resources/device.xml");
 const SERVICE_CONNECTION: &str = include_str!("../resources/connection_manager.xml");
 const SERVICE_AVTRANSPORT: &str = include_str!("../resources/av_transport.xml");
 const SERVICE_RENDERING: &str = include_str!("../resources/rendering_control.xml");
-const SINK_PROTOCOL_INFO: &str = "http-get:*:audio/mpeg:*,http-get:*:audio/mp4:*,http-get:*:audio/flac:*,http-get:*:video/mp4:*,http-get:*:video/webm:*,http-get:*:video/x-matroska:*";
 const MAX_REQUEST_SIZE: usize = 1024 * 1024;
 
 type SharedPlayer = Arc<Mutex<Box<dyn PlayerBackend>>>;
@@ -208,7 +207,11 @@ fn soap_route(
     match result {
         Ok((body, changed)) => {
             if changed {
-                notify_subscribers(subscriptions, state, service);
+                let protocol_info = player
+                    .lock()
+                    .map(|p| p.sink_protocol_info().to_owned())
+                    .unwrap_or_default();
+                notify_subscribers(subscriptions, state, service, &protocol_info);
             }
             HttpResponse {
                 status: "200 OK",
@@ -235,7 +238,9 @@ fn execute_action(
     max_history: usize,
 ) -> std::result::Result<(String, bool), UpnpError> {
     match service {
-        EventService::ConnectionManager => execute_connection_manager(action, service, request),
+        EventService::ConnectionManager => {
+            execute_connection_manager(action, service, request, player)
+        }
         EventService::AvTransport => {
             execute_av_transport(action, service, request, player, state, max_history)
         }
@@ -249,19 +254,26 @@ fn execute_connection_manager(
     action: &str,
     service: EventService,
     _request: &HttpRequest,
+    player: &SharedPlayer,
 ) -> std::result::Result<(String, bool), UpnpError> {
     match action {
-        "GetProtocolInfo" => Ok((
-            action_response(
-                service,
-                action,
-                &format!(
-                    "<Source></Source><Sink>{}</Sink>",
-                    escape_xml(SINK_PROTOCOL_INFO)
+        "GetProtocolInfo" => {
+            let protocol_info = player
+                .lock()
+                .map(|p| p.sink_protocol_info().to_owned())
+                .unwrap_or_default();
+            Ok((
+                action_response(
+                    service,
+                    action,
+                    &format!(
+                        "<Source></Source><Sink>{}</Sink>",
+                        escape_xml(&protocol_info)
+                    ),
                 ),
-            ),
-            false,
-        )),
+                false,
+            ))
+        }
         "GetCurrentConnectionIDs" => Ok((
             action_response(service, action, "<ConnectionIDs>0</ConnectionIDs>"),
             false,
@@ -564,6 +576,7 @@ fn notify_subscribers(
     subscriptions: &SharedSubscriptions,
     state: &SharedState,
     service: EventService,
+    sink_protocol_info: &str,
 ) {
     let sids = subscriptions
         .lock()
@@ -576,11 +589,16 @@ fn notify_subscribers(
         })
         .unwrap_or_default();
     for sid in sids {
-        notify_sid(subscriptions, state, &sid);
+        notify_sid(subscriptions, state, &sid, sink_protocol_info);
     }
 }
 
-fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &str) {
+fn notify_sid(
+    subscriptions: &SharedSubscriptions,
+    state: &SharedState,
+    sid: &str,
+    sink_protocol_info: &str,
+) {
     let state = match state.lock() {
         Ok(state) => state.clone(),
         Err(_) => {
@@ -606,7 +624,7 @@ fn notify_sid(subscriptions: &SharedSubscriptions, state: &SharedState, sid: &st
             return;
         }
     };
-    let body = event_body(service, &state);
+    let body = event_body(service, &state, sink_protocol_info);
     if let Err(error) = send_notify(&callback, sid, sequence, &body) {
         crate::log_error!("GENA notification to {callback} failed: {error:#}");
     }
@@ -660,7 +678,7 @@ fn parse_http_url(url: &str) -> Result<HttpTarget> {
     })
 }
 
-fn event_body(service: EventService, state: &RendererState) -> String {
+fn event_body(service: EventService, state: &RendererState, sink_protocol_info: &str) -> String {
     let properties = match service {
         EventService::AvTransport => {
             let last_change = format!(
@@ -688,7 +706,7 @@ fn event_body(service: EventService, state: &RendererState) -> String {
         }
         EventService::ConnectionManager => format!(
             "<e:property><SourceProtocolInfo></SourceProtocolInfo></e:property><e:property><SinkProtocolInfo>{}</SinkProtocolInfo></e:property><e:property><CurrentConnectionIDs>0</CurrentConnectionIDs></e:property>",
-            escape_xml(SINK_PROTOCOL_INFO)
+            escape_xml(sink_protocol_info)
         ),
     };
     format!(

@@ -39,6 +39,7 @@ pub trait PlayerBackend: Send {
     fn set_volume(&mut self, volume: u8) -> Result<()>;
     fn set_mute(&mut self, muted: bool) -> Result<()>;
     fn status(&mut self) -> Result<PlayerStatus>;
+    fn sink_protocol_info(&self) -> &str;
 }
 
 pub fn create_backend(

@@ -14,7 +14,7 @@ pub enum Command {
 pub struct App {
     config: Arc<Mutex<crate::config::Config>>,
     cast: Option<(crate::upnp::UpnpServer, crate::ssdp::SsdpServer)>,
-    settings: Option<crate::settings_server::SettingsServer>,
+    settings: Option<crate::web::SettingsServer>,
     state: Arc<Mutex<crate::state::RendererState>>,
     player: Option<Arc<Mutex<Box<dyn crate::player::PlayerBackend>>>>,
 }
@@ -104,7 +104,7 @@ impl App {
             state.cast = crate::state::CastState::Running;
             state.upnp_address = upnp_addr.clone();
         }
-        crate::settings_server::publish_status(true, upnp_addr);
+        crate::web::publish_status(true, upnp_addr);
         crate::log_info!("cast started on port {upnp_port}");
         Ok(())
     }
@@ -121,7 +121,7 @@ impl App {
         let mut state = lock(&self.state)?;
         state.cast = crate::state::CastState::Stopped;
         state.upnp_address = None;
-        crate::settings_server::publish_status(false, None);
+        crate::web::publish_status(false, None);
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
         crate::log_info!("cast stopped");
@@ -134,7 +134,7 @@ impl App {
         }
         let config = Arc::clone(&self.config);
         let port = lock(&config)?.settings.port;
-        self.settings = Some(crate::settings_server::SettingsServer::start(
+        self.settings = Some(crate::web::SettingsServer::start(
             port,
             config,
             Arc::clone(&self.state),

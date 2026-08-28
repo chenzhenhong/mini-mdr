@@ -180,6 +180,22 @@ impl PlayerBackend for VlcBackend {
             muted: volume == 0,
         })
     }
+
+    fn sink_protocol_info(&self) -> &str {
+        "http-get:*:audio/mpeg:*,\
+         http-get:*:audio/mp4:*,\
+         http-get:*:audio/flac:*,\
+         http-get:*:audio/ogg:*,\
+         http-get:*:audio/x-flac:*,\
+         http-get:*:audio/wav:*,\
+         http-get:*:audio/aac:*,\
+         http-get:*:video/mp4:*,\
+         http-get:*:video/webm:*,\
+         http-get:*:video/x-matroska:*,\
+         http-get:*:video/mpeg:*,\
+         http-get:*:video/quicktime:*,\
+         http-get:*:video/x-ms-wmv:*"
+    }
 }
 
 impl VlcSession {
