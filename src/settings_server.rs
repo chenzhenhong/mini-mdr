@@ -224,6 +224,7 @@ fn serve(
             let label_name = t(lang, "settings-device-name");
             let label_backend = t(lang, "settings-player-backend");
             let label_mpv_path = t(lang, "settings-mpv-path");
+            let label_vlc_path = t(lang, "settings-vlc-path");
             let label_max_history = t(lang, "settings-max-history");
             let save_btn = t(lang, "settings-save");
             let history_heading = t(lang, "settings-section-history");
@@ -275,9 +276,28 @@ fn serve(
                 ("LABEL_NAME", label_name.as_str()),
                 ("LABEL_BACKEND", label_backend.as_str()),
                 ("LABEL_MPV_PATH", label_mpv_path.as_str()),
+                ("LABEL_VLC_PATH", label_vlc_path.as_str()),
                 ("LABEL_MAX_HISTORY", label_max_history.as_str()),
                 ("DEVICE_NAME", config.device.name.as_str()),
+                ("BACKEND_VALUE", config.player.backend.as_str()),
+                (
+                    "MPV_SELECTED",
+                    if config.player.backend == "mpv" {
+                        "selected"
+                    } else {
+                        ""
+                    },
+                ),
+                (
+                    "VLC_SELECTED",
+                    if config.player.backend == "vlc" {
+                        "selected"
+                    } else {
+                        ""
+                    },
+                ),
                 ("MPV_PATH", config.player.mpv_path.as_str()),
+                ("VLC_PATH", config.player.vlc_path.as_str()),
                 ("MAX_HISTORY", max_history.as_str()),
                 ("SAVE_BTN", save_btn.as_str()),
                 ("HISTORY_HEADING", history_heading.as_str()),
@@ -423,6 +443,10 @@ fn update_config(
         .get("mpv_path")
         .map(|value| value.trim())
         .unwrap_or_default();
+    let vlc_path = fields
+        .get("vlc_path")
+        .map(|value| value.trim())
+        .unwrap_or_default();
     let max_history = fields
         .get("max_history")
         .and_then(|value| value.trim().parse::<usize>().ok())
@@ -441,11 +465,11 @@ fn update_config(
     if name.chars().any(char::is_control) {
         anyhow::bail!(t(lang, "error-name-control"));
     }
-    if backend != "mpv" {
-        anyhow::bail!(t(lang, "error-only-mpv"));
+    if backend != "mpv" && backend != "vlc" {
+        anyhow::bail!(t(lang, "error-unsupported-backend"));
     }
-    if mpv_path.is_empty() {
-        anyhow::bail!(t(lang, "error-mpv-path-empty"));
+    if mpv_path.is_empty() && vlc_path.is_empty() {
+        anyhow::bail!(t(lang, "error-player-path-empty"));
     }
     let mut guard = config
         .lock()
@@ -453,6 +477,7 @@ fn update_config(
     guard.device.name = name.to_owned();
     guard.player.backend = backend.to_owned();
     guard.player.mpv_path = mpv_path.to_owned();
+    guard.player.vlc_path = vlc_path.to_owned();
     guard.settings.max_history = max_history;
     guard.settings.language = language.to_owned();
     guard.save()?;

@@ -10,6 +10,7 @@ settings-section-settings = Settings
 settings-device-name = Device Name
 settings-player-backend = Player Backend
 settings-mpv-path = mpv Executable Path
+settings-vlc-path = VLC Executable Path
 settings-save = Save Settings
 settings-language = Language
 settings-language-system = System default
@@ -37,13 +38,13 @@ tab-guide = Guide
 # About page
 about-title = About
 about-subtitle = Learn more about mini-mdr.
-about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv.
+about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv or VLC.
 
 # Guide page
 guide-title = Guide
 guide-intro = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It does not decode audio or video itself — it relies on an external player backend.
 guide-player-heading = 1. Install a player backend
-guide-player-text = Download mpv for your operating system, then open Settings and set the mpv executable path. mini-mdr launches mpv to play media pushed by a DLNA/UPnP controller (for example a phone app).
+guide-player-text = Install mpv or VLC on your system, then open Settings and select the player backend and set its executable path. mini-mdr launches the player to play media pushed by a DLNA/UPnP controller (for example a phone app).
 guide-config-heading = 2. Where data is stored
 guide-config-text = Your configuration and play history are stored at:
 guide-usage-heading = 3. How to use
@@ -53,8 +54,8 @@ guide-usage-text = After launch, mini-mdr advertises a DMR on your local network
 error-save-failed = Save failed
 error-name-length = Device name must be 1 to 128 characters
 error-name-control = Device name must not contain control characters
-error-only-mpv = Only mpv backend is available in this version
-error-mpv-path-empty = mpv path must not be empty
+error-unsupported-backend = Unsupported player backend
+error-player-path-empty = Player executable path must not be empty
 error-language-invalid = Unknown language selection
 
 # State display

@@ -76,9 +76,12 @@ impl App {
             return self.stop_cast();
         }
         let config = lock(&self.config)?.clone();
-        let player: Arc<Mutex<Box<dyn crate::player::PlayerBackend>>> = Arc::new(Mutex::new(
-            crate::player::create_backend(&config.player.backend, &config.player.mpv_path)?,
-        ));
+        let player: Arc<Mutex<Box<dyn crate::player::PlayerBackend>>> =
+            Arc::new(Mutex::new(crate::player::create_backend(
+                &config.player.backend,
+                &config.player.mpv_path,
+                &config.player.vlc_path,
+            )?));
         let upnp = crate::upnp::UpnpServer::start(
             &config.device.name,
             Arc::clone(&player),

@@ -10,6 +10,7 @@ settings-section-settings = 设置
 settings-device-name = 设备名称
 settings-player-backend = 播放器后端
 settings-mpv-path = mpv 可执行文件路径
+settings-vlc-path = VLC 可执行文件路径
 settings-save = 保存设置
 settings-language = 语言
 settings-language-system = 跟随系统
@@ -37,24 +38,24 @@ tab-guide = 教程
 # About page
 about-title = 关于
 about-subtitle = 了解更多关于 mini-mdr 的信息。
-about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 播放媒体。
+about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 或 VLC 播放媒体。
 
 # Guide page
 guide-title = 教程
 guide-intro = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它本身不负责音视频解码，需要依赖外部播放器后端。
 guide-player-heading = 1. 安装播放器后端
-guide-player-text = 请自行下载适用于你系统的 mpv 播放器，然后在“设置”中填写 mpv 可执行文件路径。mini-mdr 会通过 mpv 播放由 DLNA/UPnP 控制器（例如手机 App）推送的媒体。
+guide-player-text = 请在系统中安装 mpv 或 VLC 播放器，然后在"设置"中选择播放器后端并填写可执行文件路径。mini-mdr 会通过播放器播放由 DLNA/UPnP 控制器（例如手机 App）推送的媒体。
 guide-config-heading = 2. 数据存放位置
 guide-config-text = 配置与播放历史保存在：
 guide-usage-heading = 3. 使用方法
-guide-usage-text = 启动后，mini-mdr 会在局域网内广播一个 DMR 设备。使用任意 DLNA/UPnP 控制器即可投屏到“mini-mdr”。可在托盘菜单切换 Cast 开关，并在设置中修改设备名、语言与播放器。
+guide-usage-text = 启动后，mini-mdr 会在局域网内广播一个 DMR 设备。使用任意 DLNA/UPnP 控制器即可投屏到"mini-mdr"。可在托盘菜单切换 Cast 开关，并在设置中修改设备名、语言与播放器。
 
 # Validation errors
 error-save-failed = 保存失败
 error-name-length = 设备名称必须为 1 到 128 个字符
 error-name-control = 设备名称不能包含控制字符
-error-only-mpv = 当前版本只提供 mpv 后端
-error-mpv-path-empty = mpv 路径不能为空
+error-unsupported-backend = 不支持的播放器后端
+error-player-path-empty = 播放器可执行文件路径不能为空
 error-language-invalid = 未知的语言选择
 
 # State display

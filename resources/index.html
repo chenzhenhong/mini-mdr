@@ -83,7 +83,8 @@
               </span>
               <select id="backend" name="backend"
                 class="w-full appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500">
-                <option value="mpv" selected>mpv</option>
+                <option value="mpv" {{MPV_SELECTED}}>mpv</option>
+                <option value="vlc" {{VLC_SELECTED}}>VLC</option>
               </select>
             </div>
           </div>
@@ -93,9 +94,20 @@
               <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
               </span>
-              <input id="mpv_path" name="mpv_path" required
+              <input id="mpv_path" name="mpv_path"
                 class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                 value="{{MPV_PATH}}">
+            </div>
+          </div>
+          <div>
+            <label for="vlc_path" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_VLC_PATH}}</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              </span>
+              <input id="vlc_path" name="vlc_path"
+                class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                value="{{VLC_PATH}}">
             </div>
           </div>
           <div class="sm:col-span-2">

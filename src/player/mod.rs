@@ -1,9 +1,11 @@
 mod mpv;
+mod vlc;
 
 use anyhow::{Result, anyhow};
 use std::time::Duration;
 
 pub use mpv::MpvBackend;
+pub use vlc::VlcBackend;
 
 #[derive(Clone, Debug)]
 pub struct PlayerStatus {
@@ -39,9 +41,14 @@ pub trait PlayerBackend: Send {
     fn status(&mut self) -> Result<PlayerStatus>;
 }
 
-pub fn create_backend(name: &str, mpv_path: &str) -> Result<Box<dyn PlayerBackend>> {
+pub fn create_backend(
+    name: &str,
+    mpv_path: &str,
+    vlc_path: &str,
+) -> Result<Box<dyn PlayerBackend>> {
     match name {
         "mpv" => Ok(Box::new(MpvBackend::new(mpv_path)?)),
+        "vlc" => Ok(Box::new(VlcBackend::new(vlc_path)?)),
         other => Err(anyhow!("unsupported player backend: {other}")),
     }
 }

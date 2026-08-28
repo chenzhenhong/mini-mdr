@@ -23,6 +23,7 @@ pub struct DeviceConfig {
 pub struct PlayerConfig {
     pub backend: String,
     pub mpv_path: String,
+    pub vlc_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -49,6 +50,7 @@ impl Default for PlayerConfig {
         Self {
             backend: "mpv".into(),
             mpv_path: "mpv".into(),
+            vlc_path: "vlc".into(),
         }
     }
 }
