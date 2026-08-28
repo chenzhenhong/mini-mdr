@@ -17,8 +17,11 @@ jobs:
             os: ubuntu-latest
             artifact: mini-mdr-linux-amd64
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-13
             artifact: mini-mdr-macos-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: mini-mdr-macos-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: mini-mdr-windows-amd64.exe
@@ -108,14 +111,14 @@ jobs:
           </dict>
           </plist>
           EOF
-          hdiutil create -volname "${APP}" -srcfolder "${BUNDLE_DIR}" -ov -format UDZO "mini-mdr-macos-amd64.dmg"
+          hdiutil create -volname "${APP}" -srcfolder "${BUNDLE_DIR}" -ov -format UDZO "${{ matrix.artifact }}.dmg"
 
       - name: Upload dmg
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v6
         with:
-          name: mini-mdr-macos-amd64.dmg
-          path: mini-mdr-macos-amd64.dmg
+          name: ${{ matrix.artifact }}.dmg
+          path: ${{ matrix.artifact }}.dmg
 
   release:
     needs: build
