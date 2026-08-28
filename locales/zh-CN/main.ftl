@@ -2,6 +2,8 @@
 tray-cast = 投屏
 tray-more = 更多
 tray-quit = 退出程序
+tray-open-settings = 打开设置
+tray-open-log-dir = 打开日志目录
 
 # Settings page
 settings-title = mini-mdr 设置

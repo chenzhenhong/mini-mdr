@@ -148,6 +148,11 @@ pub fn write(level: &str, args: Arguments<'_>) {
         let _ = file.flush();
         rotate_if_needed(&file);
     }
+
+    // desktop notification for errors (best-effort, no recursion)
+    if level == "ERROR" {
+        crate::tray::notify_error(&line.trim());
+    }
 }
 
 #[macro_export]

@@ -2,6 +2,8 @@
 tray-cast = Cast
 tray-more = More
 tray-quit = Quit
+tray-open-settings = Open Settings
+tray-open-log-dir = Open Log Directory
 
 # Settings page
 settings-title = mini-mdr Settings

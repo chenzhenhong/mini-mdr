@@ -1,12 +1,14 @@
 use crate::i18n::{Language, t};
 use anyhow::Result;
-use ldtray::{Event, Icon, Menu, MenuItem, Tray, TrayConfig, TrayHandle};
+use ldtray::{Event, Icon, Menu, MenuItem, Notification, Tray, TrayConfig, TrayHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock, mpsc};
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
+use std::time::{Duration, Instant};
 
 pub const TOGGLE_CAST: u32 = 1;
 pub const OPEN_SETTINGS: u32 = 2;
 pub const QUIT: u32 = 4;
+pub const OPEN_LOG_DIR: u32 = 8;
 
 const TRAY_ICON_SIZE: u32 = 32;
 const TRAY_ICON_RGBA: &[u8; (TRAY_ICON_SIZE * TRAY_ICON_SIZE * 4) as usize] =
@@ -27,12 +29,20 @@ pub fn refresh_menu() {
 
 fn menu(casting: bool, lang: Language) -> Menu {
     let toggle = t(lang, "tray-cast");
-    let settings = t(lang, "tray-more");
     let quit = t(lang, "tray-quit");
+    let more = t(lang, "tray-more");
+    let open_settings = t(lang, "tray-open-settings");
+    let open_log_dir = t(lang, "tray-open-log-dir");
     Menu::new()
         .item(MenuItem::checkbox(TOGGLE_CAST, toggle, casting))
         .item(MenuItem::separator())
-        .item(MenuItem::button(OPEN_SETTINGS, settings))
+        .item(MenuItem::submenu(
+            more,
+            [
+                MenuItem::button(OPEN_SETTINGS, open_settings),
+                MenuItem::button(OPEN_LOG_DIR, open_log_dir),
+            ],
+        ))
         .item(MenuItem::button(QUIT, quit))
 }
 
@@ -76,13 +86,21 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
         }
         if let Event::Menu(id) = event {
             let command = match id.0 {
-                TOGGLE_CAST => crate::app::Command::ToggleCast,
-                OPEN_SETTINGS => crate::app::Command::OpenSettings,
-                QUIT => crate::app::Command::Quit,
-                _ => return,
+                TOGGLE_CAST => Some(crate::app::Command::ToggleCast),
+                OPEN_SETTINGS => Some(crate::app::Command::OpenSettings),
+                OPEN_LOG_DIR => {
+                    if let Ok(dir) = crate::config::Config::config_dir() {
+                        let _ = open::that(dir);
+                    }
+                    None
+                }
+                QUIT => Some(crate::app::Command::Quit),
+                _ => None,
             };
-            if let Err(error) = sender.send(command) {
-                crate::log_error!("sending tray command: {error}");
+            if let Some(cmd) = command {
+                if let Err(error) = sender.send(cmd) {
+                    crate::log_error!("sending tray command: {error}");
+                }
             }
             if id.0 == TOGGLE_CAST {
                 let casting = !CASTING.load(Ordering::Relaxed);
@@ -107,4 +125,31 @@ fn tray_icon() -> Result<Icon> {
         TRAY_ICON_SIZE,
         TRAY_ICON_RGBA.to_vec(),
     )?)
+}
+
+static LAST_NOTIFY: OnceLock<Mutex<Instant>> = OnceLock::new();
+
+pub fn notify_error(message: &str) {
+    let now = Instant::now();
+    let last = LAST_NOTIFY
+        .get_or_init(|| Mutex::new(now))
+        .lock()
+        .map(|mut guard| {
+            if now.duration_since(*guard) < Duration::from_secs(1) {
+                return true;
+            }
+            *guard = now;
+            false
+        })
+        .unwrap_or(false);
+    if last {
+        return;
+    }
+    if let Some(handle) = TRAY_HANDLE.get() {
+        let icon = match Icon::from_rgba(TRAY_ICON_SIZE, TRAY_ICON_SIZE, TRAY_ICON_RGBA.to_vec()) {
+            Ok(icon) => icon,
+            Err(_) => return,
+        };
+        let _ = handle.notify(Notification::new("mini-mdr", message).with_icon(icon));
+    }
 }
