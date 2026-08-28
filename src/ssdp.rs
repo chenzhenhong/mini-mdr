@@ -52,7 +52,7 @@ impl SsdpServer {
             let senders = create_multicast_senders(&local_ips);
             crate::log_info!("SSDP server started, location={location}");
             for _ in 0..3 {
-                announce(&senders, &location, &name, "ssdp:alive");
+                announce(&senders, http_port, &name, "ssdp:alive");
                 thread::sleep(Duration::from_millis(200));
             }
             let mut last_announce = Instant::now();
@@ -81,11 +81,11 @@ impl SsdpServer {
                     }
                 }
                 if last_announce.elapsed() >= Duration::from_secs(900) {
-                    announce(&senders, &location, &name, "ssdp:alive");
+                    announce(&senders, http_port, &name, "ssdp:alive");
                     last_announce = Instant::now();
                 }
             }
-            announce(&senders, &location, &name, "ssdp:byebye");
+            announce(&senders, http_port, &name, "ssdp:byebye");
         })?;
         Ok(Self {
             running,
@@ -169,10 +169,10 @@ fn respond_to_search(
     }
 }
 
-fn announce(senders: &[MulticastSender], location: &str, name: &str, nts: &str) {
+fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str) {
     for target in ADVERTISED_TARGETS {
         let date = timestamp_rfc1123();
-        let mut message = format!(
+        let base = format!(
             "NOTIFY * HTTP/1.1\r\n\
              HOST: 239.255.255.250:1900\r\n\
              NT: {target}\r\n\
@@ -182,14 +182,16 @@ fn announce(senders: &[MulticastSender], location: &str, name: &str, nts: &str) 
              DATE: {date}\r\n",
             usn(target)
         );
-        if nts == "ssdp:alive" {
-            message.push_str(&format!(
-                "CACHE-CONTROL: max-age=1800\r\n\
-                 LOCATION: {location}\r\n"
-            ));
-        }
-        message.push_str("\r\n");
         for sender in senders {
+            let mut message = base.clone();
+            if nts == "ssdp:alive" {
+                message.push_str(&format!(
+                    "CACHE-CONTROL: max-age=1800\r\n\
+                     LOCATION: http://{}:{http_port}/device.xml\r\n",
+                    sender.ip
+                ));
+            }
+            message.push_str("\r\n");
             if let Err(error) = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
                 crate::log_error!("sending SSDP {nts}: {error}");
             }
@@ -242,9 +244,15 @@ fn list_local_ipv4() -> Vec<Ipv4Addr> {
 fn find_best_local_ip(ips: &[Ipv4Addr]) -> Ipv4Addr {
     ips.iter()
         .copied()
-        .find(|ip| is_rfc1918(*ip))
+        .find(|ip| is_preferred_lan(*ip))
+        .or_else(|| ips.iter().copied().find(|ip| is_rfc1918(*ip)))
         .or_else(|| ips.first().copied())
         .unwrap_or(Ipv4Addr::LOCALHOST)
+}
+
+fn is_preferred_lan(ip: Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 192 && o[1] == 168
 }
 
 fn find_matching_interface(local_ips: &[Ipv4Addr], peer: IpAddr) -> Option<Ipv4Addr> {
