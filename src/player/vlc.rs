@@ -12,6 +12,7 @@ const VLC_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct VlcBackend {
     executable: String,
     session: Option<VlcSession>,
+    failed_permanently: bool,
     pre_mute_volume: u8,
 }
 
@@ -29,13 +30,28 @@ impl VlcBackend {
         Ok(Self {
             executable: path.to_owned(),
             session: None,
+            failed_permanently: false,
             pre_mute_volume: 100,
         })
     }
 
     fn session(&mut self) -> Result<&mut VlcSession> {
+        if self.failed_permanently {
+            anyhow::bail!("vlc not found, check player.vlc_path in config");
+        }
         if self.session.is_none() {
-            self.session = Some(VlcSession::start(&self.executable)?);
+            match VlcSession::start(&self.executable) {
+                Ok(session) => {
+                    self.session = Some(session);
+                }
+                Err(error) => {
+                    if is_program_not_found(&error) {
+                        self.failed_permanently = true;
+                        crate::log_error!("vlc not found at '{}', will not retry", self.executable);
+                    }
+                    return Err(error);
+                }
+            }
         }
         self.session.as_mut().context("vlc session did not start")
     }
@@ -102,6 +118,21 @@ impl VlcBackend {
         let end = xml.find(&close)?;
         Some(&xml[start..end])
     }
+}
+
+fn is_program_not_found(error: &anyhow::Error) -> bool {
+    for cause in error.chain() {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            if io_err.kind() == std::io::ErrorKind::NotFound {
+                return true;
+            }
+            #[cfg(windows)]
+            if io_err.raw_os_error() == Some(2) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 impl PlayerBackend for VlcBackend {
