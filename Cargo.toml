@@ -25,7 +25,7 @@ winresource = "0.1"
 
 [package.metadata.deb]
 name = "mini-mdr"
-maintainer = "chenzhenhong <2246467700@qq.com>"
+maintainer = "chenzhenhong <chenzhenhong2@gmail.com>"
 copyright = "2024, chenzhenhong"
 license-file = ["LICENSE", "0"]
 extended-description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
