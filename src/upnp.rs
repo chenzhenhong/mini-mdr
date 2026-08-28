@@ -175,7 +175,7 @@ fn route(
             max_history,
         ),
         ("SUBSCRIBE", path) => match event_service(path) {
-            Some(service) => subscribe(request, service, state, subscriptions),
+            Some(service) => subscribe(request, service, player, state, subscriptions),
             None => plain_response("404 Not Found", "Not found\n"),
         },
         ("UNSUBSCRIBE", path) => match event_service(path) {
@@ -497,6 +497,7 @@ fn execute_rendering_control(
 fn subscribe(
     request: &HttpRequest,
     service: EventService,
+    player: &SharedPlayer,
     state: &SharedState,
     subscriptions: &SharedSubscriptions,
 ) -> HttpResponse {
@@ -547,7 +548,11 @@ fn subscribe(
     } else {
         return plain_response("500 Internal Server Error", "subscription state failed\n");
     }
-    notify_sid(subscriptions, state, &sid);
+    let sink_protocol_info = player
+        .lock()
+        .map(|p| p.sink_protocol_info().to_owned())
+        .unwrap_or_default();
+    notify_sid(subscriptions, state, &sid, &sink_protocol_info);
     subscription_response(&sid, timeout)
 }
 
