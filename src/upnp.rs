@@ -1032,7 +1032,7 @@ fn escape_xml(value: &str) -> String {
         .replace('\'', "&apos;")
 }
 fn decode_xml(value: &str) -> String {
-    let mut result = value
+    let result = value
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")

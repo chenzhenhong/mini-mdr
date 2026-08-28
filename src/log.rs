@@ -110,11 +110,7 @@ fn rotate_if_needed(file: &File) {
     };
     let keep_bytes = ROTATE_KEEP as usize;
     let file_size = meta.len() as usize;
-    let read_start = if file_size > keep_bytes {
-        file_size - keep_bytes
-    } else {
-        0
-    };
+    let read_start = file_size.saturating_sub(keep_bytes);
     let mut f = match fs::File::open(&path) {
         Ok(f) => f,
         Err(_) => return,
