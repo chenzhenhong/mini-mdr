@@ -298,7 +298,7 @@ fn set_reuse_addr(socket: &UdpSocket) -> Result<()> {
     #[cfg(windows)]
     {
         use std::os::windows::io::AsRawSocket;
-        extern "system" {
+        unsafe extern "system" {
             fn setsockopt(
                 s: libc::SOCKET,
                 level: libc::c_int,
@@ -350,7 +350,7 @@ fn set_multicast_if(socket: &UdpSocket, interface: Ipv4Addr) -> Result<()> {
     #[cfg(windows)]
     {
         use std::os::windows::io::AsRawSocket;
-        extern "system" {
+        unsafe extern "system" {
             fn setsockopt(
                 s: libc::SOCKET,
                 level: libc::c_int,
