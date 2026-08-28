@@ -88,7 +88,7 @@
               </select>
             </div>
           </div>
-          <div>
+          <div id="mpv-path-wrap">
             <label for="mpv_path" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_MPV_PATH}}</label>
             <div class="relative">
               <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -99,7 +99,7 @@
                 value="{{MPV_PATH}}">
             </div>
           </div>
-          <div>
+          <div id="vlc-path-wrap">
             <label for="vlc_path" class="mb-1.5 block text-sm font-medium text-gray-700">{{LABEL_VLC_PATH}}</label>
             <div class="relative">
               <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -261,6 +261,18 @@
       }
       tabs.forEach(function (b) { b.addEventListener('click', function () { activate(b.dataset.tab); }); });
       activate('settings');
+
+      // Toggle path fields based on backend selection
+      var backendSelect = document.getElementById('backend');
+      var mpvWrap = document.getElementById('mpv-path-wrap');
+      var vlcWrap = document.getElementById('vlc-path-wrap');
+      function togglePathFields() {
+        var v = backendSelect.value;
+        mpvWrap.classList.toggle('hidden', v !== 'mpv');
+        vlcWrap.classList.toggle('hidden', v !== 'vlc');
+      }
+      togglePathFields();
+      backendSelect.addEventListener('change', togglePathFields);
 
       // History: one-time load for instant paint, then live updates via SSE
       function applyHistory(d) {
