@@ -45,7 +45,7 @@ impl VlcBackend {
                     self.session = Some(session);
                 }
                 Err(error) => {
-                    if is_program_not_found(&error) {
+                    if super::is_program_not_found(&error) {
                         self.failed_permanently = true;
                         crate::log_error!("vlc not found at '{}', will not retry", self.executable);
                     }
@@ -118,21 +118,6 @@ impl VlcBackend {
         let end = xml.find(&close)?;
         Some(&xml[start..end])
     }
-}
-
-fn is_program_not_found(error: &anyhow::Error) -> bool {
-    for cause in error.chain() {
-        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
-            if io_err.kind() == std::io::ErrorKind::NotFound {
-                return true;
-            }
-            #[cfg(windows)]
-            if io_err.raw_os_error() == Some(2) {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 impl PlayerBackend for VlcBackend {
