@@ -60,6 +60,7 @@ impl SsdpServer {
             if best_ip == Ipv4Addr::LOCALHOST {
                 crate::log_warn!("could not detect local IP for SSDP LOCATION, using 127.0.0.1");
             }
+            let senders = create_multicast_senders(&local_ips);
             for _ in 0..3 {
                 announce(&senders, http_port, &name, "ssdp:alive");
                 thread::sleep(Duration::from_millis(200));

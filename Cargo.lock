@@ -465,6 +465,7 @@ dependencies = [
  "fluent",
  "fluent-bundle 0.16.0",
  "ldtray",
+ "libc",
  "local-ip-address",
  "notify",
  "open",
