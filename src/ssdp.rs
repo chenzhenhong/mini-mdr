@@ -1,6 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use local_ip_address::list_afinet_netifas;
 use std::{
+    collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     sync::{
         Arc,
@@ -33,40 +34,75 @@ pub struct SsdpServer {
 
 impl SsdpServer {
     pub fn start(http_port: u16, device_name: &str) -> Result<Self> {
-        let socket =
-            UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1900)).context("binding SSDP UDP port 1900")?;
-        socket.set_read_timeout(Some(Duration::from_millis(300)))?;
-        socket.set_multicast_loop_v4(true)?;
-        set_reuse_addr(&socket)?;
-        socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)?;
+        let local_ips = list_local_ipv4();
+        if local_ips.is_empty() {
+            crate::log_warn!("no local IPv4 interfaces found, SSDP will retry later");
+        }
+
+        let socket = socket2::Socket::new(
+            socket2::AddressFamily::IPV4,
+            socket2::SocketType::DGRAM,
+            Some(socket2::Protocol::UDP),
+        )?;
+        socket.set_reuse_address(true)?;
+        #[cfg(windows)]
+        socket.set_only_v4(true)?;
+        socket.bind(&SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 1900).into())?;
+        socket.set_nonblocking(false)?;
+        let std_socket: UdpSocket = socket.into();
+        std_socket.set_read_timeout(Some(Duration::from_millis(300)))?;
+        std_socket.set_multicast_loop_v4(true)?;
+
+        for &ip in &local_ips {
+            if let Err(error) =
+                multicast_join_v4(&std_socket, &Ipv4Addr::new(239, 255, 255, 250), &ip)
+            {
+                crate::log_warn!("multicast join failed for {ip}: {error}");
+            }
+        }
+
         let running = Arc::new(AtomicBool::new(true));
         let active = Arc::clone(&running);
         let name = sanitize_header_value(device_name);
         let thread = thread::Builder::new().name("ssdp".into()).spawn(move || {
-            let local_ips = list_local_ipv4();
-            let best_ip = find_best_local_ip(&local_ips);
-            let location = format!("http://{best_ip}:{http_port}/device.xml");
+            let mut senders = create_multicast_senders(&local_ips);
+            let mut best_ip = find_best_local_ip(&local_ips);
+            let mut location = format!("http://{best_ip}:{http_port}/device.xml");
             if best_ip == Ipv4Addr::LOCALHOST {
                 crate::log_warn!("could not detect local IP for SSDP LOCATION, using 127.0.0.1");
             }
-            let senders = create_multicast_senders(&local_ips);
             crate::log_info!("SSDP server started, location={location}");
-            for _ in 0..3 {
-                announce(&senders, http_port, &name, "ssdp:alive");
-                thread::sleep(Duration::from_millis(200));
-            }
+
+            announce(&senders, http_port, &name, "ssdp:alive");
             let mut last_announce = Instant::now();
+            let mut last_refresh = Instant::now();
             let mut buffer = [0; 4096];
+
             while active.load(Ordering::Relaxed) {
-                match socket.recv_from(&mut buffer) {
+                if last_announce.elapsed() >= Duration::from_secs(30) {
+                    announce(&senders, http_port, &name, "ssdp:alive");
+                    last_announce = Instant::now();
+                }
+
+                if last_refresh.elapsed() >= Duration::from_secs(10) {
+                    refresh_interfaces(
+                        &std_socket,
+                        &mut senders,
+                        &mut best_ip,
+                        &mut location,
+                        http_port,
+                    );
+                    last_refresh = Instant::now();
+                }
+
+                match std_socket.recv_from(&mut buffer) {
                     Ok((size, peer)) => {
                         respond_to_search(
-                            &senders,
+                            &std_socket,
                             &buffer[..size],
                             peer,
                             &location,
                             &name,
-                            &local_ips,
                             http_port,
                         );
                     }
@@ -80,10 +116,6 @@ impl SsdpServer {
                         break;
                     }
                 }
-                if last_announce.elapsed() >= Duration::from_secs(900) {
-                    announce(&senders, http_port, &name, "ssdp:alive");
-                    last_announce = Instant::now();
-                }
             }
             announce(&senders, http_port, &name, "ssdp:byebye");
         })?;
@@ -95,12 +127,11 @@ impl SsdpServer {
 }
 
 fn respond_to_search(
-    senders: &[MulticastSender],
+    socket: &UdpSocket,
     data: &[u8],
     peer: SocketAddr,
     location: &str,
     name: &str,
-    local_ips: &[Ipv4Addr],
     http_port: u16,
 ) {
     let request = String::from_utf8_lossy(data);
@@ -131,25 +162,13 @@ fn respond_to_search(
             None => return,
         }
     };
-    let peer_ip = peer.ip();
-    let matched_sender = senders
-        .iter()
-        .find(|s| find_matching_interface(local_ips, peer_ip) == Some(s.ip));
-    let matched_location = if let Some(sender) = matched_sender {
-        format!("http://{}:{http_port}/device.xml", sender.ip)
-    } else {
-        location.to_owned()
-    };
-    let response_socket = matched_sender
-        .map(|s| &s.socket)
-        .or_else(|| senders.first().map(|s| &s.socket));
     for target in targets {
         let usn = usn(target);
         let response = format!(
             "HTTP/1.1 200 OK\r\n\
              CACHE-CONTROL: max-age=1800\r\n\
              EXT:\r\n\
-             LOCATION: {matched_location}\r\n\
+             LOCATION: {location}\r\n\
              SERVER: {name}\r\n\
              ST: {target}\r\n\
              USN: {usn}\r\n\
@@ -157,13 +176,7 @@ fn respond_to_search(
              \r\n",
             timestamp_rfc1123()
         );
-        if let Some(sock) = response_socket {
-            if let Err(error) = sock.send_to(response.as_bytes(), peer) {
-                crate::log_error!("sending SSDP response: {error}");
-            }
-        } else if let Err(error) = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
-            .and_then(|s| s.send_to(response.as_bytes(), peer).map(|_| ()))
-        {
+        if let Err(error) = socket.send_to(response.as_bytes(), peer) {
             crate::log_error!("sending SSDP response: {error}");
         }
     }
@@ -194,9 +207,6 @@ fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str) 
             message.push_str("\r\n");
             if let Err(error) = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
                 crate::log_error!("sending SSDP {nts}: {error}");
-            }
-            if nts == "ssdp:alive" {
-                let _ = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS);
             }
         }
     }
@@ -255,29 +265,6 @@ fn is_preferred_lan(ip: Ipv4Addr) -> bool {
     o[0] == 192 && o[1] == 168
 }
 
-fn find_matching_interface(local_ips: &[Ipv4Addr], peer: IpAddr) -> Option<Ipv4Addr> {
-    let peer_v4 = match peer {
-        IpAddr::V4(v4) => v4,
-        _ => return None,
-    };
-    local_ips
-        .iter()
-        .copied()
-        .find(|local| is_same_subnet(*local, peer_v4))
-        .or_else(|| local_ips.first().copied())
-}
-
-fn is_same_subnet(a: Ipv4Addr, b: Ipv4Addr) -> bool {
-    let ao = a.octets();
-    let bo = b.octets();
-    match (ao[0], ao[1]) {
-        (10, _) => ao[0] == bo[0],
-        (172, 16..=31) => ao[0] == bo[0] && ao[1] == bo[1],
-        (192, 168) => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
-        _ => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
-    }
-}
-
 fn is_rfc1918(ip: Ipv4Addr) -> bool {
     let o = ip.octets();
     o[0] == 10 || (o[0] == 172 && (16..=31).contains(&o[1])) || (o[0] == 192 && o[1] == 168)
@@ -306,7 +293,49 @@ impl MulticastSender {
     }
 }
 
-fn set_reuse_addr(socket: &UdpSocket) -> Result<()> {
+fn refresh_interfaces(
+    socket: &UdpSocket,
+    senders: &mut Vec<MulticastSender>,
+    best_ip: &mut Ipv4Addr,
+    location: &mut String,
+    http_port: u16,
+) {
+    let new_ips = list_local_ipv4();
+    let new_best = find_best_local_ip(&new_ips);
+
+    if new_best != *best_ip && new_best != Ipv4Addr::LOCALHOST {
+        *best_ip = new_best;
+        *location = format!("http://{new_best}:{http_port}/device.xml");
+        crate::log_info!("SSDP LOCATION updated to {location}");
+    }
+
+    let current_sender_ips: HashSet<Ipv4Addr> = senders.iter().map(|s| s.ip).collect();
+    let new_ips_set: HashSet<Ipv4Addr> = new_ips.iter().copied().collect();
+
+    for &ip in &new_ips {
+        if !current_sender_ips.contains(&ip) {
+            match MulticastSender::new(ip) {
+                Ok(sender) => {
+                    if let Err(error) =
+                        multicast_join_v4(socket, &Ipv4Addr::new(239, 255, 255, 250), &ip)
+                    {
+                        crate::log_warn!("multicast join failed for {ip}: {error}");
+                    }
+                    crate::log_info!("SSDP multicast sender created for {ip}");
+                    senders.push(sender);
+                }
+                Err(error) => {
+                    crate::log_warn!("creating SSDP sender for {ip}: {error}");
+                }
+            }
+        }
+    }
+
+    senders.retain(|s| new_ips_set.contains(&s.ip));
+}
+
+fn multicast_join_v4(socket: &UdpSocket, group: &Ipv4Addr, interface: &Ipv4Addr) -> Result<()> {
+    let addr = interface.octets();
     #[cfg(windows)]
     {
         use std::os::windows::io::AsRawSocket;
@@ -319,39 +348,45 @@ fn set_reuse_addr(socket: &UdpSocket) -> Result<()> {
                 optlen: libc::c_int,
             ) -> libc::c_int;
         }
-        const SOL_SOCKET: libc::c_int = 1;
-        const SO_REUSEADDR: libc::c_int = 4;
-        let val: i32 = 1;
+        const IPPROTO_IP: libc::c_int = 0;
+        const IP_ADD_MEMBERSHIP: libc::c_int = 12;
+        let group_octets = group.octets();
+        let mut mreq = [0u8; 8];
+        mreq[..4].copy_from_slice(&group_octets);
+        mreq[4..8].copy_from_slice(&addr);
         let raw = socket.as_raw_socket();
         let ret = unsafe {
             setsockopt(
                 raw as libc::SOCKET,
-                SOL_SOCKET,
-                SO_REUSEADDR,
-                &val as *const i32 as *const u8,
-                std::mem::size_of::<i32>() as libc::c_int,
+                IPPROTO_IP,
+                IP_ADD_MEMBERSHIP,
+                mreq.as_ptr(),
+                mreq.len() as libc::c_int,
             )
         };
         if ret != 0 {
-            crate::log_warn!("setsockopt SO_REUSEADDR failed");
+            anyhow::bail!("IP_ADD_MEMBERSHIP failed for {interface}");
         }
     }
     #[cfg(unix)]
     {
         use std::os::fd::AsRawFd;
         let fd = socket.as_raw_fd();
-        let val: libc::c_int = 1;
+        let group_octets = group.octets();
+        let mut mreq = [0u8; 8];
+        mreq[..4].copy_from_slice(&group_octets);
+        mreq[4..8].copy_from_slice(&addr);
         let ret = unsafe {
             libc::setsockopt(
                 fd,
-                libc::SOL_SOCKET,
-                libc::SO_REUSEADDR,
-                &val as *const libc::c_int as *const libc::c_void,
-                std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                libc::IPPROTO_IP,
+                libc::IP_ADD_MEMBERSHIP,
+                mreq.as_ptr() as *const libc::c_void,
+                mreq.len() as libc::socklen_t,
             )
         };
         if ret != 0 {
-            crate::log_warn!("setsockopt SO_REUSEADDR failed");
+            anyhow::bail!("IP_ADD_MEMBERSHIP failed for {interface}");
         }
     }
     Ok(())
@@ -567,5 +602,16 @@ mod tests {
         let ts = timestamp_rfc1123();
         assert!(ts.ends_with(" GMT"));
         assert!(ts.contains("2026"));
+    }
+
+    fn is_same_subnet(a: Ipv4Addr, b: Ipv4Addr) -> bool {
+        let ao = a.octets();
+        let bo = b.octets();
+        match (ao[0], ao[1]) {
+            (10, _) => ao[0] == bo[0],
+            (172, 16..=31) => ao[0] == bo[0] && ao[1] == bo[1],
+            (192, 168) => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
+            _ => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
+        }
     }
 }
