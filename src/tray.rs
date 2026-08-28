@@ -97,10 +97,10 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
                 QUIT => Some(crate::app::Command::Quit),
                 _ => None,
             };
-            if let Some(cmd) = command {
-                if let Err(error) = sender.send(cmd) {
-                    crate::log_error!("sending tray command: {error}");
-                }
+            if let Some(cmd) = command
+                && let Err(error) = sender.send(cmd)
+            {
+                crate::log_error!("sending tray command: {error}");
             }
             if id.0 == TOGGLE_CAST {
                 let casting = !CASTING.load(Ordering::Relaxed);

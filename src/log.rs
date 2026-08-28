@@ -151,7 +151,7 @@ pub fn write(level: &str, args: Arguments<'_>) {
 
     // desktop notification for errors (best-effort, no recursion)
     if level == "ERROR" {
-        crate::tray::notify_error(&line.trim());
+        crate::tray::notify_error(line.trim());
     }
 }
 
