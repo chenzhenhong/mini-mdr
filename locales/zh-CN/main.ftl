@@ -14,7 +14,7 @@ settings-vlc-path = VLC 可执行文件路径
 settings-save = 保存设置
 settings-language = 语言
 settings-language-system = 跟随系统
-settings-saved = 设置已保存。语言立即生效，其他设置需要重新启动 Cast 才能生效。
+settings-saved = 设置已保存。语言立即生效，其他设置需重启生效。
 settings-section-history = 历史记录
 settings-history-index = #
 settings-history-time = 时间
@@ -27,7 +27,7 @@ settings-history-empty-sub = 您的播放历史将在这里显示。
 settings-history-subtitle = 查看最近播放的媒体历史。
 settings-max-history = 最大历史记录数
 settings-status = 状态
-settings-hint = 设备名称、播放器和最大历史记录数的更改需要重新启动 Cast（先停止再开始）才能生效。
+settings-hint = 需重启生效
 
 # Tabs
 tab-settings = 设置
