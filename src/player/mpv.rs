@@ -79,7 +79,7 @@ impl MpvSession {
                 "--force-window=immediate",
                 "--no-terminal",
                 "--keep-open=yes",
-                "--autofit=100%x100%",
+                "--fullscreen",
                 &format!("--input-ipc-server={}", endpoint.to_string_lossy()),
             ])
             .stdin(Stdio::null())
