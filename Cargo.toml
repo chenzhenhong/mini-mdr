@@ -1,6 +1,6 @@
 [package]
 name = "mini-mdr"
-version = "0.2.32"
+version = "0.2.33"
 edition = "2024"
 description = "A tray-only UPnP/DLNA MediaRenderer with a pluggable player backend"
 license = "MIT"
@@ -9,6 +9,7 @@ repository = "https://github.com/chenzhenhong/mini-mdr"
 [dependencies]
 anyhow = "1"
 directories = "6"
+local-ip-address = "0.6"
 fluent = "0.16"
 fluent-bundle = "0.16"
 ldtray = "0.1.2"

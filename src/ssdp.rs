@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use local_ip_address::list_afinet_netifas;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     sync::{
@@ -6,7 +7,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const MULTICAST_ADDRESS: SocketAddr =
@@ -41,21 +42,32 @@ impl SsdpServer {
         let active = Arc::clone(&running);
         let name = sanitize_header_value(device_name);
         let thread = thread::Builder::new().name("ssdp".into()).spawn(move || {
-            let location = format!(
-                "http://{}:{http_port}/device.xml",
-                local_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
-            );
-            if local_ip().is_none() {
+            let local_ips = list_local_ipv4();
+            let best_ip = find_best_local_ip(&local_ips);
+            let location = format!("http://{best_ip}:{http_port}/device.xml");
+            if best_ip == Ipv4Addr::LOCALHOST {
                 crate::log_warn!("could not detect local IP for SSDP LOCATION, using 127.0.0.1");
             }
+            let senders = create_multicast_senders(&local_ips);
             crate::log_info!("SSDP server started, location={location}");
-            announce(&socket, &location, &name, "ssdp:alive");
+            for _ in 0..3 {
+                announce(&senders, &location, &name, "ssdp:alive");
+                thread::sleep(Duration::from_millis(200));
+            }
             let mut last_announce = Instant::now();
             let mut buffer = [0; 4096];
             while active.load(Ordering::Relaxed) {
                 match socket.recv_from(&mut buffer) {
                     Ok((size, peer)) => {
-                        respond_to_search(&socket, &buffer[..size], peer, &location, &name)
+                        respond_to_search(
+                            &socket,
+                            &buffer[..size],
+                            peer,
+                            &location,
+                            &name,
+                            &local_ips,
+                            http_port,
+                        );
                     }
                     Err(error)
                         if matches!(
@@ -68,11 +80,11 @@ impl SsdpServer {
                     }
                 }
                 if last_announce.elapsed() >= Duration::from_secs(900) {
-                    announce(&socket, &location, &name, "ssdp:alive");
+                    announce(&senders, &location, &name, "ssdp:alive");
                     last_announce = Instant::now();
                 }
             }
-            announce(&socket, &location, &name, "ssdp:byebye");
+            announce(&senders, &location, &name, "ssdp:byebye");
         })?;
         Ok(Self {
             running,
@@ -87,6 +99,8 @@ fn respond_to_search(
     peer: SocketAddr,
     location: &str,
     name: &str,
+    local_ips: &[Ipv4Addr],
+    http_port: u16,
 ) {
     let request = String::from_utf8_lossy(data);
     if !request
@@ -116,10 +130,27 @@ fn respond_to_search(
             None => return,
         }
     };
+    let peer_ip = peer.ip();
+    let matched_ip = find_matching_interface(local_ips, peer_ip).unwrap_or(Ipv4Addr::UNSPECIFIED);
+    let matched_location =
+        if matched_ip != Ipv4Addr::UNSPECIFIED && matched_ip != Ipv4Addr::LOCALHOST {
+            format!("http://{matched_ip}:{http_port}/device.xml")
+        } else {
+            location.to_owned()
+        };
     for target in targets {
         let usn = usn(target);
         let response = format!(
-            "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nEXT:\r\nLOCATION: {location}\r\nSERVER: {name}/1.0 UPnP/1.1 mini-mdr/0.1\r\nST: {target}\r\nUSN: {usn}\r\n\r\n"
+            "HTTP/1.1 200 OK\r\n\
+             CACHE-CONTROL: max-age=1800\r\n\
+             EXT:\r\n\
+             LOCATION: {matched_location}\r\n\
+             SERVER: {name}\r\n\
+             ST: {target}\r\n\
+             USN: {usn}\r\n\
+             DATE: {}\r\n\
+             \r\n",
+            timestamp_rfc1123()
         );
         if let Err(error) = socket.send_to(response.as_bytes(), peer) {
             crate::log_error!("sending SSDP response: {error}");
@@ -127,20 +158,30 @@ fn respond_to_search(
     }
 }
 
-fn announce(socket: &UdpSocket, location: &str, name: &str, nts: &str) {
+fn announce(senders: &[MulticastSender], location: &str, name: &str, nts: &str) {
     for target in ADVERTISED_TARGETS {
+        let date = timestamp_rfc1123();
         let mut message = format!(
-            "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: {target}\r\nNTS: {nts}\r\nUSN: {}\r\nSERVER: {name}/1.0 UPnP/1.1 mini-mdr/0.1\r\n",
+            "NOTIFY * HTTP/1.1\r\n\
+             HOST: 239.255.255.250:1900\r\n\
+             NT: {target}\r\n\
+             NTS: {nts}\r\n\
+             USN: {}\r\n\
+             SERVER: {name}\r\n\
+             DATE: {date}\r\n",
             usn(target)
         );
         if nts == "ssdp:alive" {
             message.push_str(&format!(
-                "CACHE-CONTROL: max-age=1800\r\nLOCATION: {location}\r\n"
+                "CACHE-CONTROL: max-age=1800\r\n\
+                 LOCATION: {location}\r\n"
             ));
         }
         message.push_str("\r\n");
-        if let Err(error) = socket.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
-            crate::log_error!("sending SSDP {nts}: {error}");
+        for sender in senders {
+            if let Err(error) = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
+                crate::log_error!("sending SSDP {nts}: {error}");
+            }
         }
     }
 }
@@ -171,6 +212,146 @@ fn header<'a>(request: &'a str, target: &str) -> Option<&'a str> {
         let (name, value) = line.split_once(':')?;
         name.eq_ignore_ascii_case(target).then(|| value.trim())
     })
+}
+
+fn list_local_ipv4() -> Vec<Ipv4Addr> {
+    list_afinet_netifas()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(_name, ip)| match ip {
+            IpAddr::V4(v4) if !v4.is_loopback() => Some(v4),
+            _ => None,
+        })
+        .collect()
+}
+
+fn find_best_local_ip(ips: &[Ipv4Addr]) -> Ipv4Addr {
+    ips.iter()
+        .copied()
+        .find(|ip| is_rfc1918(*ip))
+        .or_else(|| ips.first().copied())
+        .unwrap_or(Ipv4Addr::LOCALHOST)
+}
+
+fn find_matching_interface(local_ips: &[Ipv4Addr], peer: IpAddr) -> Option<Ipv4Addr> {
+    let peer_v4 = match peer {
+        IpAddr::V4(v4) => v4,
+        _ => return None,
+    };
+    local_ips
+        .iter()
+        .copied()
+        .find(|local| is_same_subnet(*local, peer_v4))
+        .or_else(|| local_ips.first().copied())
+}
+
+fn is_same_subnet(a: Ipv4Addr, b: Ipv4Addr) -> bool {
+    let ao = a.octets();
+    let bo = b.octets();
+    match (ao[0], ao[1]) {
+        (10, _) => ao[0] == bo[0],
+        (172, 16..=31) => ao[0] == bo[0] && ao[1] == bo[1],
+        (192, 168) => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
+        _ => ao[0] == bo[0] && ao[1] == bo[1] && ao[2] == bo[2],
+    }
+}
+
+fn is_rfc1918(ip: Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 10 || (o[0] == 172 && (16..=31).contains(&o[1])) || (o[0] == 192 && o[1] == 168)
+}
+
+struct MulticastSender {
+    socket: UdpSocket,
+}
+
+impl MulticastSender {
+    fn new(ip: Ipv4Addr) -> Result<Self> {
+        let socket = UdpSocket::bind((ip, 0))?;
+        socket.set_multicast_loop_v4(true)?;
+        Ok(Self { socket })
+    }
+
+    fn send_to(&self, data: &[u8], dest: SocketAddr) -> Result<()> {
+        self.socket.send_to(data, dest)?;
+        Ok(())
+    }
+}
+
+fn create_multicast_senders(ips: &[Ipv4Addr]) -> Vec<MulticastSender> {
+    let mut senders = Vec::new();
+    for &ip in ips {
+        match MulticastSender::new(ip) {
+            Ok(sender) => senders.push(sender),
+            Err(error) => {
+                crate::log_warn!("creating SSDP sender for {ip}: {error}");
+            }
+        }
+    }
+    if senders.is_empty() {
+        crate::log_warn!("no SSDP multicast senders created, alive notifications disabled");
+    }
+    senders
+}
+
+fn timestamp_rfc1123() -> String {
+    const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let mut y = 1970u32;
+    let mut remaining = days;
+    loop {
+        let days_in_year = if is_leap(y) { 366 } else { 365 };
+        if remaining < days_in_year as u64 {
+            break;
+        }
+        remaining -= days_in_year as u64;
+        y += 1;
+    }
+    let leap = is_leap(y);
+    let month_days: [u32; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut m = 0u32;
+    let mut rem = remaining as u32;
+    for (i, &d) in month_days.iter().enumerate() {
+        if rem < d {
+            m = i;
+            break;
+        }
+        rem -= d;
+    }
+    let day = rem + 1;
+    let weekday = ((days + 3) % 7) as usize;
+    let hour = (time_of_day / 3600) as u32;
+    let min = ((time_of_day % 3600) / 60) as u32;
+    let sec = (time_of_day % 60) as u32;
+    format!(
+        "{}, {day:02} {} {y} {hour:02}:{min:02}:{sec:02} GMT",
+        DAYS[weekday], MONTHS[m as usize]
+    )
+}
+
+fn is_leap(y: u32) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
 pub fn local_ip() -> Option<IpAddr> {
@@ -210,5 +391,48 @@ mod tests {
             "TV  X-Injected: 1"
         );
         assert_eq!(sanitize_header_value("客厅"), "客厅");
+    }
+
+    #[test]
+    fn subnet_matching_covers_common_private_ranges() {
+        let local = Ipv4Addr::new(192, 168, 1, 100);
+        assert!(is_same_subnet(local, Ipv4Addr::new(192, 168, 1, 50)));
+        assert!(!is_same_subnet(local, Ipv4Addr::new(192, 168, 2, 50)));
+
+        let local10 = Ipv4Addr::new(10, 0, 0, 1);
+        assert!(is_same_subnet(local10, Ipv4Addr::new(10, 0, 0, 50)));
+        assert!(!is_same_subnet(local10, Ipv4Addr::new(10, 1, 0, 50)));
+
+        let local172 = Ipv4Addr::new(172, 16, 5, 1);
+        assert!(is_same_subnet(local172, Ipv4Addr::new(172, 16, 5, 50)));
+        assert!(!is_same_subnet(local172, Ipv4Addr::new(172, 17, 5, 50)));
+    }
+
+    #[test]
+    fn finds_best_local_ip_prefers_rfc1918() {
+        let ips = vec![Ipv4Addr::new(172, 217, 22, 14)];
+        assert_eq!(find_best_local_ip(&ips), Ipv4Addr::new(172, 217, 22, 14));
+
+        let ips = vec![
+            Ipv4Addr::new(172, 217, 22, 14),
+            Ipv4Addr::new(192, 168, 1, 100),
+        ];
+        assert_eq!(find_best_local_ip(&ips), Ipv4Addr::new(192, 168, 1, 100));
+    }
+
+    #[test]
+    fn rfc1918_detection() {
+        assert!(is_rfc1918(Ipv4Addr::new(10, 0, 0, 1)));
+        assert!(is_rfc1918(Ipv4Addr::new(172, 16, 0, 1)));
+        assert!(is_rfc1918(Ipv4Addr::new(192, 168, 0, 1)));
+        assert!(!is_rfc1918(Ipv4Addr::new(8, 8, 8, 8)));
+        assert!(!is_rfc1918(Ipv4Addr::new(172, 32, 0, 1)));
+    }
+
+    #[test]
+    fn timestamp_rfc1123_format() {
+        let ts = timestamp_rfc1123();
+        assert!(ts.ends_with(" GMT"));
+        assert!(ts.contains("2026"));
     }
 }
