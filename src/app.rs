@@ -124,6 +124,8 @@ impl App {
         crate::web::publish_status(false, None);
         state.transport = crate::state::TransportState::Stopped;
         state.position = std::time::Duration::ZERO;
+        state.uri = None;
+        state.title = None;
         crate::log_info!("cast stopped");
         Ok(())
     }

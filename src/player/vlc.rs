@@ -129,6 +129,9 @@ impl PlayerBackend for VlcBackend {
     }
 
     fn play(&mut self) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         let status = self.get_status_xml().unwrap_or_default();
         if Self::xml_tag(&status, "state").unwrap_or("") == "paused" {
             self.post("pl_pause")?;
@@ -139,29 +142,41 @@ impl PlayerBackend for VlcBackend {
     }
 
     fn pause(&mut self) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.post("pl_pause")?;
         Ok(())
     }
 
     fn stop(&mut self) -> Result<()> {
-        if self.session.is_some() {
-            self.post("pl_stop")?;
+        if let Some(session) = self.session.take() {
+            drop(session);
         }
         Ok(())
     }
 
     fn seek(&mut self, position: Duration) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.post(&format!("seek&val={}", position.as_secs()))?;
         Ok(())
     }
 
     fn set_volume(&mut self, volume: u8) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         let vlc_volume = (volume.min(100) as u32) * 256 / 100;
         self.post(&format!("volume&val={vlc_volume}"))?;
         Ok(())
     }
 
     fn set_mute(&mut self, muted: bool) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         if muted {
             let status = self.get_status_xml().unwrap_or_default();
             self.pre_mute_volume = Self::xml_tag(&status, "volume")

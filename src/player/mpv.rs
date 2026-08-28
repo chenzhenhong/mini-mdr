@@ -211,33 +211,48 @@ impl PlayerBackend for MpvBackend {
     }
 
     fn play(&mut self) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.command(json!({"command": ["set_property", "pause", false]}))?;
         Ok(())
     }
 
     fn pause(&mut self) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.command(json!({"command": ["set_property", "pause", true]}))?;
         Ok(())
     }
 
     fn stop(&mut self) -> Result<()> {
-        if self.session.is_some() {
-            self.command(json!({"command": ["stop"]}))?;
+        if let Some(session) = self.session.take() {
+            drop(session);
         }
         Ok(())
     }
 
     fn seek(&mut self, position: Duration) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.command(json!({"command": ["seek", position.as_secs_f64(), "absolute", "exact"]}))?;
         Ok(())
     }
 
     fn set_volume(&mut self, volume: u8) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.command(json!({"command": ["set_property", "volume", volume.min(100)]}))?;
         Ok(())
     }
 
     fn set_mute(&mut self, muted: bool) -> Result<()> {
+        if self.session.is_none() {
+            return Ok(());
+        }
         self.command(json!({"command": ["set_property", "mute", muted]}))?;
         Ok(())
     }
@@ -306,7 +321,17 @@ impl MpvBackend {
 
 impl Drop for MpvSession {
     fn drop(&mut self) {
-        if let Err(error) = self.child.kill()
+        // Ask mpv to quit on its own so it closes its window gracefully
+        // instead of being force-killed (which causes a visible flash).
+        let quit = json!({ "command": ["quit"] });
+        if serde_json::to_writer(&mut self.writer, &quit).is_ok()
+            && self.writer.write_all(b"\n").is_ok()
+        {
+            let _ = self.writer.flush();
+        }
+        std::thread::sleep(Duration::from_millis(300));
+        if self.child.try_wait().ok().flatten().is_none()
+            && let Err(error) = self.child.kill()
             && error.kind() != std::io::ErrorKind::InvalidInput
         {
             crate::log_error!("stopping mpv: {error}");

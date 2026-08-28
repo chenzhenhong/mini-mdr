@@ -358,6 +358,8 @@ fn execute_av_transport(
             player.stop().map_err(player_error)?;
             state.transport = TransportState::Stopped;
             state.position = Duration::ZERO;
+            state.uri = None;
+            state.title = None;
             Ok((action_response(service, action, ""), true))
         }
         "Seek" => {
