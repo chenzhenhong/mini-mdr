@@ -599,11 +599,15 @@ fn sse_stream(
     )?;
     stream.flush()?;
 
-    let running_now = state
+    let (running_now, address_now) = state
         .lock()
-        .map(|s| s.cast == crate::state::CastState::Running)
-        .unwrap_or(false);
-    let address_now = state.lock().ok().and_then(|s| s.upnp_address.clone());
+        .map(|s| {
+            (
+                s.cast == crate::state::CastState::Running,
+                s.upnp_address.clone(),
+            )
+        })
+        .unwrap_or((false, None));
     if !send_event(
         stream,
         "status",

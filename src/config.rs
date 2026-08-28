@@ -2,7 +2,11 @@ use crate::state::HistoryEntry;
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -64,6 +68,8 @@ impl Default for SettingsConfig {
         }
     }
 }
+
+static HISTORY_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
 impl Config {
     pub fn path() -> Result<PathBuf> {
@@ -137,6 +143,10 @@ impl Config {
     }
 
     pub fn append_history(entry: HistoryEntry, max: usize) -> Result<()> {
+        let mutex = HISTORY_MUTEX.get_or_init(|| Mutex::new(()));
+        let _guard = mutex
+            .lock()
+            .map_err(|_| anyhow::anyhow!("history lock poisoned"))?;
         let mut entries = Self::load_history();
         entries.push(entry);
         let max = max.max(1);

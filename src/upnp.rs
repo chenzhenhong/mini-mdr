@@ -342,17 +342,20 @@ fn execute_av_transport(
         }
         "Pause" => {
             require_instance_zero(request)?;
-            if lock_state(state)?.uri.is_none() {
+            let mut player = lock_player(player)?;
+            let mut state = lock_state(state)?;
+            if state.uri.is_none() {
                 return Err(UpnpError::new(714, "No Such Resource"));
             }
-            lock_player(player)?.pause().map_err(player_error)?;
-            lock_state(state)?.transport = TransportState::PausedPlayback;
+            player.pause().map_err(player_error)?;
+            state.transport = TransportState::PausedPlayback;
             Ok((action_response(service, action, ""), true))
         }
         "Stop" => {
             require_instance_zero(request)?;
-            lock_player(player)?.stop().map_err(player_error)?;
+            let mut player = lock_player(player)?;
             let mut state = lock_state(state)?;
+            player.stop().map_err(player_error)?;
             state.transport = TransportState::Stopped;
             state.position = Duration::ZERO;
             Ok((action_response(service, action, ""), true))
@@ -363,8 +366,10 @@ fn execute_av_transport(
                 return Err(UpnpError::new(710, "Seek Mode Not Supported"));
             }
             let position = parse_upnp_time(&required_value(&request.body, "Target")?)?;
-            lock_player(player)?.seek(position).map_err(player_error)?;
-            lock_state(state)?.position = position;
+            let mut player = lock_player(player)?;
+            let mut state = lock_state(state)?;
+            player.seek(position).map_err(player_error)?;
+            state.position = position;
             Ok((action_response(service, action, ""), true))
         }
         "GetTransportInfo" => {
@@ -1027,12 +1032,49 @@ fn escape_xml(value: &str) -> String {
         .replace('\'', "&apos;")
 }
 fn decode_xml(value: &str) -> String {
-    value
+    let mut result = value
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
-        .replace("&apos;", "'")
+        .replace("&apos;", "'");
+    // Handle numeric character references: &#60; and &#x3C;
+    let mut pos = 0;
+    let mut decoded = String::new();
+    while pos < result.len() {
+        if let Some(start) = result[pos..].find("&#") {
+            let abs_start = pos + start;
+            // Copy everything before the reference
+            decoded.push_str(&result[pos..abs_start]);
+            let ref_start = abs_start + 2;
+            if let Some(end) = result[ref_start..].find(';') {
+                let ref_content = &result[ref_start..ref_start + end];
+                let ch = if let Some(hex) = ref_content.strip_prefix('x') {
+                    u32::from_str_radix(hex, 16).ok()
+                } else {
+                    ref_content.parse::<u32>().ok()
+                }
+                .and_then(std::char::from_u32);
+                if let Some(ch) = ch {
+                    decoded.push(ch);
+                } else {
+                    // Invalid reference, keep as-is
+                    decoded.push_str("&#");
+                    decoded.push_str(ref_content);
+                    decoded.push(';');
+                }
+                pos = ref_start + end + 1;
+            } else {
+                // No closing semicolon, keep as-is
+                decoded.push_str("&#");
+                pos = ref_start;
+            }
+        } else {
+            decoded.push_str(&result[pos..]);
+            break;
+        }
+    }
+    decoded
 }
 
 impl Drop for UpnpServer {

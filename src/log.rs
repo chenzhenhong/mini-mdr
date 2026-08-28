@@ -1,7 +1,7 @@
 use std::{
     fmt::Arguments,
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
@@ -108,17 +108,30 @@ fn rotate_if_needed(file: &File) {
         Some(p) => p,
         None => return,
     };
-    let content = fs::read_to_string(&path).unwrap_or_default();
     let keep_bytes = ROTATE_KEEP as usize;
-    let start = if content.len() > keep_bytes {
-        content[content.len() - keep_bytes..]
-            .find('\n')
-            .map(|i| i + 1)
-            .unwrap_or(0)
+    let file_size = meta.len() as usize;
+    let read_start = if file_size > keep_bytes {
+        file_size - keep_bytes
     } else {
         0
     };
-    let trimmed = &content[start..];
+    let mut f = match fs::File::open(&path) {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    if f.seek(SeekFrom::Start(read_start as u64)).is_err() {
+        return;
+    }
+    let mut tail = Vec::new();
+    if f.read_to_end(&mut tail).is_err() {
+        return;
+    }
+    let start = tail
+        .iter()
+        .position(|&b| b == b'\n')
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    let trimmed = &tail[start..];
     let _ = fs::write(&path, trimmed);
     if let Ok(new_file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = FILE.set(Mutex::new(new_file));

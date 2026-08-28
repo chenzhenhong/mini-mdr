@@ -12,6 +12,7 @@ const VLC_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct VlcBackend {
     executable: String,
     session: Option<VlcSession>,
+    pre_mute_volume: u8,
 }
 
 struct VlcSession {
@@ -28,6 +29,7 @@ impl VlcBackend {
         Ok(Self {
             executable: path.to_owned(),
             session: None,
+            pre_mute_volume: 100,
         })
     }
 
@@ -143,14 +145,14 @@ impl PlayerBackend for VlcBackend {
 
     fn set_mute(&mut self, muted: bool) -> Result<()> {
         if muted {
+            let status = self.get_status_xml().unwrap_or_default();
+            self.pre_mute_volume = Self::xml_tag(&status, "volume")
+                .and_then(|v| v.parse::<u32>().ok())
+                .map(|v| (v * 100 / 256).min(100) as u8)
+                .unwrap_or(100);
             self.post("volume&val=0")?;
         } else {
-            let status = self.get_status_xml().unwrap_or_default();
-            let current = Self::xml_tag(&status, "volume")
-                .and_then(|v| v.parse::<u32>().ok())
-                .unwrap_or(256);
-            let volume_pct = (current * 100 / 256).min(100) as u8;
-            self.set_volume(volume_pct)?;
+            self.set_volume(self.pre_mute_volume)?;
         }
         Ok(())
     }
@@ -245,6 +247,8 @@ impl Drop for VlcSession {
     }
 }
 
+// NOTE: There is a small TOCTOU window between dropping the listener and VLC
+// binding to the port. This is acceptable for a single-user desktop application.
 fn find_free_port() -> Result<u16> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();

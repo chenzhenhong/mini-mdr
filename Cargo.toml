@@ -48,3 +48,7 @@ assets = [
     { source = "target/release/mini-mdr", dest = "/usr/bin/mini-mdr", mode = "755" },
     { source = "resources/icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/mini-mdr.png" },
 ]
+
+[profile.release]
+strip = true
+lto = true
