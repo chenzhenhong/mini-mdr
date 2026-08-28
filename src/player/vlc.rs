@@ -1,7 +1,7 @@
 use super::{PlayerBackend, PlayerStatus};
 use anyhow::{Context, Result};
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
     process::{Child, Command, Stdio},
     time::Duration,
