@@ -330,7 +330,7 @@ fn timestamp_rfc1123() -> String {
         30,
         31,
     ];
-    let mut m = 0u32;
+    let mut m = 0usize;
     let mut rem = remaining as u32;
     for (i, &d) in month_days.iter().enumerate() {
         if rem < d {
