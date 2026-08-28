@@ -38,19 +38,28 @@ impl SsdpServer {
         socket.set_read_timeout(Some(Duration::from_millis(300)))?;
         socket.set_multicast_loop_v4(true)?;
         set_reuse_addr(&socket)?;
-        socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)?;
+        if let Err(error) =
+            socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)
+        {
+            crate::log_warn!("SSDP multicast join failed: {error}");
+        }
         let running = Arc::new(AtomicBool::new(true));
         let active = Arc::clone(&running);
         let name = sanitize_header_value(device_name);
         let thread = thread::Builder::new().name("ssdp".into()).spawn(move || {
+            for (ifname, ip) in list_afinet_netifas().unwrap_or_default() {
+                crate::log_info!("[ssdp-diag] iface {ifname} = {ip}");
+            }
             let local_ips = list_local_ipv4();
+            crate::log_info!("[ssdp-diag] filtered local_ips = {local_ips:?}");
             let best_ip = find_best_local_ip(&local_ips);
+            crate::log_info!("[ssdp-diag] best_ip = {best_ip}");
+            let route_ip = local_ip();
+            crate::log_info!("[ssdp-diag] default_route_ip = {route_ip:?}");
             let location = format!("http://{best_ip}:{http_port}/device.xml");
             if best_ip == Ipv4Addr::LOCALHOST {
                 crate::log_warn!("could not detect local IP for SSDP LOCATION, using 127.0.0.1");
             }
-            let senders = create_multicast_senders(&local_ips);
-            crate::log_info!("SSDP server started, location={location}");
             for _ in 0..3 {
                 announce(&senders, http_port, &name, "ssdp:alive");
                 thread::sleep(Duration::from_millis(200));
@@ -111,6 +120,7 @@ fn respond_to_search(
     {
         return;
     }
+    crate::log_info!("[ssdp-diag] M-SEARCH from {peer}, responding with location {location}");
     let search_target = header(&request, "ST").unwrap_or_default();
     let targets: Vec<&str> = if search_target.eq_ignore_ascii_case("ssdp:all") {
         ADVERTISED_TARGETS.to_vec()
