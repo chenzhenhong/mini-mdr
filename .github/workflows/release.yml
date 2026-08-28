@@ -15,16 +15,16 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact: mini-mdr-linux-amd64
+            platform: linux-amd64
           - target: x86_64-apple-darwin
             os: macos-15-intel
-            artifact: mini-mdr-macos-amd64
+            platform: macos-amd64
           - target: aarch64-apple-darwin
             os: macos-latest
-            artifact: mini-mdr-macos-arm64
+            platform: macos-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            artifact: mini-mdr-windows-amd64.exe
+            platform: windows-amd64
 
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.target }}
@@ -38,22 +38,27 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Get version
+        id: version
+        run: echo "value=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary (unix)
         if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/mini-mdr ${{ matrix.artifact }}
+        run: cp target/${{ matrix.target }}/release/mini-mdr mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}
 
       - name: Rename binary (windows)
         if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/mini-mdr.exe ${{ matrix.artifact }}
+        run: cp target/${{ matrix.target }}/release/mini-mdr.exe mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.exe
 
       - name: Upload binary
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}
+          path: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}*
 
       - name: Install cargo-deb
         if: runner.os == 'Linux'
@@ -63,12 +68,16 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo deb --no-build --target ${{ matrix.target }}
 
+      - name: Rename deb
+        if: runner.os == 'Linux'
+        run: mv target/${{ matrix.target }}/debian/*.deb mini-mdr_${{ steps.version.outputs.value }}_${{ matrix.platform }}.deb
+
       - name: Upload deb
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
         with:
-          name: mini-mdr-linux-amd64.deb
-          path: target/${{ matrix.target }}/debian/*.deb
+          name: mini-mdr_${{ steps.version.outputs.value }}_${{ matrix.platform }}.deb
+          path: mini-mdr_${{ steps.version.outputs.value }}_${{ matrix.platform }}.deb
 
       - name: Install cargo-generate-rpm
         if: runner.os == 'Linux'
@@ -78,19 +87,23 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo generate-rpm --target ${{ matrix.target }}
 
+      - name: Rename rpm
+        if: runner.os == 'Linux'
+        run: mv target/${{ matrix.target }}/generate-rpm/*.rpm mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.rpm
+
       - name: Upload rpm
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v6
         with:
-          name: mini-mdr-linux-amd64.rpm
-          path: target/${{ matrix.target }}/generate-rpm/*.rpm
+          name: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.rpm
+          path: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.rpm
 
       - name: Build dmg
         if: runner.os == 'macOS'
         run: |
           APP=mini-mdr
+          VERSION=${{ steps.version.outputs.value }}
           BUNDLE_DIR="target/${{ matrix.target }}/release/bundle/macOS/${APP}.app"
-          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           mkdir -p "${BUNDLE_DIR}/Contents/MacOS" "${BUNDLE_DIR}/Contents/Resources"
           cp "target/${{ matrix.target }}/release/${APP}" "${BUNDLE_DIR}/Contents/MacOS/${APP}"
           cp resources/icon.png "${BUNDLE_DIR}/Contents/Resources/icon.png"
@@ -111,14 +124,14 @@ jobs:
           </dict>
           </plist>
           EOF
-          hdiutil create -volname "${APP}" -srcfolder "${BUNDLE_DIR}" -ov -format UDZO "${{ matrix.artifact }}.dmg"
+          hdiutil create -volname "${APP}" -srcfolder "${BUNDLE_DIR}" -ov -format UDZO "mini-mdr-${VERSION}-${{ matrix.platform }}.dmg"
 
       - name: Upload dmg
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.artifact }}.dmg
-          path: ${{ matrix.artifact }}.dmg
+          name: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.dmg
+          path: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.dmg
 
   release:
     needs: build
