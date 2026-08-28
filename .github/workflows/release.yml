@@ -55,6 +55,7 @@ jobs:
         run: cp target/${{ matrix.target }}/release/mini-mdr.exe mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}.exe
 
       - name: Upload binary
+        if: runner.os != 'macOS'
         uses: actions/upload-artifact@v6
         with:
           name: mini-mdr-${{ steps.version.outputs.value }}-${{ matrix.platform }}
