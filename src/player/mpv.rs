@@ -54,8 +54,7 @@ impl MpvBackend {
                     crate::log_info!("mpv process started");
                 }
                 Err(error) => {
-                    let msg = error.to_string();
-                    if msg.contains("program not found") || msg.contains("not found") {
+                    if is_program_not_found(&error) {
                         self.failed_permanently = true;
                         crate::log_error!("mpv not found at '{}', will not retry", self.executable);
                     }
@@ -194,6 +193,21 @@ impl MpvSession {
             }
         }
     }
+}
+
+fn is_program_not_found(error: &anyhow::Error) -> bool {
+    for cause in error.chain() {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            if io_err.kind() == std::io::ErrorKind::NotFound {
+                return true;
+            }
+            #[cfg(windows)]
+            if io_err.raw_os_error() == Some(2) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 impl PlayerBackend for MpvBackend {
