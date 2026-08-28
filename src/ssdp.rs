@@ -521,7 +521,8 @@ mod tests {
 
         let local10 = Ipv4Addr::new(10, 0, 0, 1);
         assert!(is_same_subnet(local10, Ipv4Addr::new(10, 0, 0, 50)));
-        assert!(!is_same_subnet(local10, Ipv4Addr::new(10, 1, 0, 50)));
+        assert!(is_same_subnet(local10, Ipv4Addr::new(10, 1, 0, 50)));
+        assert!(!is_same_subnet(local10, Ipv4Addr::new(11, 0, 0, 50)));
 
         let local172 = Ipv4Addr::new(172, 16, 5, 1);
         assert!(is_same_subnet(local172, Ipv4Addr::new(172, 16, 5, 50)));
