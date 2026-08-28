@@ -23,6 +23,7 @@ controlled through mpv's JSON IPC interface.
 - Pluggable `PlayerBackend` abstraction
 - Default `mpv` backend over JSON IPC (named pipe on Windows, Unix socket
   elsewhere); the mpv process starts lazily on first media load
+- Optional `VLC` backend over HTTP interface
 - System-tray-only application control with a dynamic Start/Stop Cast label
 - Local settings server with an editable form that persists configuration
 - Media history tracking with configurable max entries (persisted to disk)
@@ -31,10 +32,12 @@ controlled through mpv's JSON IPC interface.
 - Embedded 32x32 RGBA8 tray icon with no runtime image decoding
 - i18n support: English and Chinese, auto-detected from system locale
 
-The tray menu contains exactly three entries:
+The tray menu has the following structure:
 
-1. `Start Cast` / `Stop Cast` (label reflects current Cast state)
-2. `Open Settings`
+1. `Start Cast` / `Stop Cast` (checkbox reflecting current Cast state)
+2. `More` > (submenu)
+   - `Open Settings`
+   - `Open Directory` (opens the config/log directory in the file manager)
 3. `Quit`
 
 ## Architecture
@@ -114,7 +117,8 @@ Open Settings click       -> open the page in the default browser
 ```
 
 The server listens only on loopback and opens the page with the system default
-browser. Current settings include the device name, player backend, and mpv path.
+browser. Current settings include the device name, player backend, mpv path,
+and vlc path.
 
 ### Quit
 
@@ -132,6 +136,7 @@ name = "mini-mdr(<hostname>)"   # hostname from $HOSTNAME or $HOST
 [player]
 backend = "mpv"
 mpv_path = "mpv"
+vlc_path = "vlc"
 
 [settings]
 port = 7878
@@ -152,12 +157,14 @@ mpv:
 
 ```text
 PlayerBackend
-    └── MpvBackend (default)
+    ├── MpvBackend (default)
+    └── VlcBackend
 ```
 
 The interface currently covers loading, play, pause, stop, seek, volume, mute,
-and status queries. Future backends such as GStreamer or FFmpeg should implement
-this trait and be registered in `player::create_backend`.
+status queries, and protocol info reporting. Future backends such as GStreamer
+or FFmpeg should implement this trait and be registered in
+`player::create_backend`.
 
 The current plugin model is compile-time extensibility through Rust
 implementations selected by configuration. Runtime loading of third-party DLLs
@@ -186,8 +193,7 @@ The current implementation provides a deliberately small protocol surface:
 
 The implementation is not yet a complete DLNA certification implementation. In
 particular, requests are served sequentially, track metadata is minimal
-(no DIDLLite), only instance `0` exists, and the advertised protocol info list
-is static rather than derived from the active player backend.
+(no DIDLLite), and only instance `0` exists.
 
 ## Development
 
@@ -228,5 +234,4 @@ This is an early MVP under active development. Current status:
 - AUR packaging for Arch Linux
 
 Priority follow-up work: concurrent request handling, persistent per-install
-UPnP UDN, DIDLLite metadata, dynamic protocol info from backend, and
-integration tests.
+UPnP UDN, DIDLLite metadata, and integration tests.
