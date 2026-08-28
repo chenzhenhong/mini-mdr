@@ -235,7 +235,7 @@ fn list_local_ipv4() -> Vec<Ipv4Addr> {
         .unwrap_or_default()
         .into_iter()
         .filter_map(|(_name, ip)| match ip {
-            IpAddr::V4(v4) if !v4.is_loopback() => Some(v4),
+            IpAddr::V4(v4) if !v4.is_loopback() && !is_link_local(v4) => Some(v4),
             _ => None,
         })
         .collect()
@@ -281,6 +281,10 @@ fn is_same_subnet(a: Ipv4Addr, b: Ipv4Addr) -> bool {
 fn is_rfc1918(ip: Ipv4Addr) -> bool {
     let o = ip.octets();
     o[0] == 10 || (o[0] == 172 && (16..=31).contains(&o[1])) || (o[0] == 192 && o[1] == 168)
+}
+
+fn is_link_local(ip: Ipv4Addr) -> bool {
+    ip.octets()[0..2] == [169, 254]
 }
 
 struct MulticastSender {
