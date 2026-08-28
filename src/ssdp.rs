@@ -66,12 +66,13 @@ impl SsdpServer {
                 thread::sleep(Duration::from_millis(200));
             }
             let mut last_announce = Instant::now();
+            let mut reannounce_at = Some(Instant::now() + Duration::from_secs(3));
             let mut buffer = [0; 4096];
             while active.load(Ordering::Relaxed) {
                 match socket.recv_from(&mut buffer) {
                     Ok((size, peer)) => {
                         respond_to_search(
-                            &senders,
+                            &socket,
                             &buffer[..size],
                             peer,
                             &location,
@@ -94,6 +95,12 @@ impl SsdpServer {
                     announce(&senders, http_port, &name, "ssdp:alive");
                     last_announce = Instant::now();
                 }
+                if let Some(at) = reannounce_at
+                    && at <= Instant::now()
+                {
+                    announce(&senders, http_port, &name, "ssdp:alive");
+                    reannounce_at = None;
+                }
             }
             announce(&senders, http_port, &name, "ssdp:byebye");
         })?;
@@ -105,7 +112,7 @@ impl SsdpServer {
 }
 
 fn respond_to_search(
-    senders: &[MulticastSender],
+    socket: &UdpSocket,
     data: &[u8],
     peer: SocketAddr,
     location: &str,
@@ -143,17 +150,9 @@ fn respond_to_search(
         }
     };
     let peer_ip = peer.ip();
-    let matched_sender = senders
-        .iter()
-        .find(|s| find_matching_interface(local_ips, peer_ip) == Some(s.ip));
-    let matched_location = if let Some(sender) = matched_sender {
-        format!("http://{}:{http_port}/device.xml", sender.ip)
-    } else {
-        location.to_owned()
-    };
-    let response_socket = matched_sender
-        .map(|s| &s.socket)
-        .or_else(|| senders.first().map(|s| &s.socket));
+    let matched_location = find_matching_interface(local_ips, peer_ip)
+        .map(|ip| format!("http://{ip}:{http_port}/device.xml"))
+        .unwrap_or_else(|| location.to_owned());
     for target in targets {
         let usn = usn(target);
         let response = format!(
@@ -168,13 +167,7 @@ fn respond_to_search(
              \r\n",
             timestamp_rfc1123()
         );
-        if let Some(sock) = response_socket {
-            if let Err(error) = sock.send_to(response.as_bytes(), peer) {
-                crate::log_error!("sending SSDP response: {error}");
-            }
-        } else if let Err(error) = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
-            .and_then(|s| s.send_to(response.as_bytes(), peer).map(|_| ()))
-        {
+        if let Err(error) = socket.send_to(response.as_bytes(), peer) {
             crate::log_error!("sending SSDP response: {error}");
         }
     }
