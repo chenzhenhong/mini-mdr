@@ -120,12 +120,7 @@ fn rotate_if_needed(file: &File) {
     };
     let trimmed = &content[start..];
     let _ = fs::write(&path, trimmed);
-    if let Some(new_file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .ok()
-    {
+    if let Ok(new_file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = FILE.set(Mutex::new(new_file));
     }
 }
@@ -146,12 +141,12 @@ pub fn write(level: &str, args: Arguments<'_>) {
     }
 
     // file
-    if let Some(guard) = FILE.get() {
-        if let Ok(mut file) = guard.lock() {
-            let _ = file.write_all(line.as_bytes());
-            let _ = file.flush();
-            rotate_if_needed(&file);
-        }
+    if let Some(guard) = FILE.get()
+        && let Ok(mut file) = guard.lock()
+    {
+        let _ = file.write_all(line.as_bytes());
+        let _ = file.flush();
+        rotate_if_needed(&file);
     }
 }
 
