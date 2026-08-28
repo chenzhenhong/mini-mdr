@@ -37,6 +37,7 @@ impl SsdpServer {
             UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1900)).context("binding SSDP UDP port 1900")?;
         socket.set_read_timeout(Some(Duration::from_millis(300)))?;
         socket.set_multicast_loop_v4(true)?;
+        set_reuse_addr(&socket)?;
         socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)?;
         let running = Arc::new(AtomicBool::new(true));
         let active = Arc::clone(&running);
@@ -60,7 +61,7 @@ impl SsdpServer {
                 match socket.recv_from(&mut buffer) {
                     Ok((size, peer)) => {
                         respond_to_search(
-                            &socket,
+                            &senders,
                             &buffer[..size],
                             peer,
                             &location,
@@ -94,7 +95,7 @@ impl SsdpServer {
 }
 
 fn respond_to_search(
-    socket: &UdpSocket,
+    senders: &[MulticastSender],
     data: &[u8],
     peer: SocketAddr,
     location: &str,
@@ -131,13 +132,17 @@ fn respond_to_search(
         }
     };
     let peer_ip = peer.ip();
-    let matched_ip = find_matching_interface(local_ips, peer_ip).unwrap_or(Ipv4Addr::UNSPECIFIED);
-    let matched_location =
-        if matched_ip != Ipv4Addr::UNSPECIFIED && matched_ip != Ipv4Addr::LOCALHOST {
-            format!("http://{matched_ip}:{http_port}/device.xml")
-        } else {
-            location.to_owned()
-        };
+    let matched_sender = senders
+        .iter()
+        .find(|s| find_matching_interface(local_ips, peer_ip).map_or(false, |ip| ip == s.ip));
+    let matched_location = if let Some(sender) = matched_sender {
+        format!("http://{}:{http_port}/device.xml", sender.ip)
+    } else {
+        location.to_owned()
+    };
+    let response_socket = matched_sender
+        .map(|s| &s.socket)
+        .or_else(|| senders.first().map(|s| &s.socket));
     for target in targets {
         let usn = usn(target);
         let response = format!(
@@ -152,7 +157,13 @@ fn respond_to_search(
              \r\n",
             timestamp_rfc1123()
         );
-        if let Err(error) = socket.send_to(response.as_bytes(), peer) {
+        if let Some(sock) = response_socket {
+            if let Err(error) = sock.send_to(response.as_bytes(), peer) {
+                crate::log_error!("sending SSDP response: {error}");
+            }
+        } else if let Err(error) = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
+            .and_then(|s| s.send_to(response.as_bytes(), peer).map(|_| ()))
+        {
             crate::log_error!("sending SSDP response: {error}");
         }
     }
@@ -181,6 +192,9 @@ fn announce(senders: &[MulticastSender], location: &str, name: &str, nts: &str) 
         for sender in senders {
             if let Err(error) = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS) {
                 crate::log_error!("sending SSDP {nts}: {error}");
+            }
+            if nts == "ssdp:alive" {
+                let _ = sender.send_to(message.as_bytes(), MULTICAST_ADDRESS);
             }
         }
     }
@@ -263,13 +277,15 @@ fn is_rfc1918(ip: Ipv4Addr) -> bool {
 
 struct MulticastSender {
     socket: UdpSocket,
+    ip: Ipv4Addr,
 }
 
 impl MulticastSender {
     fn new(ip: Ipv4Addr) -> Result<Self> {
         let socket = UdpSocket::bind((ip, 0))?;
         socket.set_multicast_loop_v4(true)?;
-        Ok(Self { socket })
+        set_multicast_if(&socket, ip)?;
+        Ok(Self { socket, ip })
     }
 
     fn send_to(&self, data: &[u8], dest: SocketAddr) -> Result<()> {
@@ -278,11 +294,115 @@ impl MulticastSender {
     }
 }
 
+fn set_reuse_addr(socket: &UdpSocket) -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawSocket;
+        extern "system" {
+            fn setsockopt(
+                s: libc::SOCKET,
+                level: libc::c_int,
+                optname: libc::c_int,
+                optval: *const u8,
+                optlen: libc::c_int,
+            ) -> libc::c_int;
+        }
+        const SOL_SOCKET: libc::c_int = 1;
+        const SO_REUSEADDR: libc::c_int = 4;
+        let val: i32 = 1;
+        let raw = socket.as_raw_socket();
+        let ret = unsafe {
+            setsockopt(
+                raw as libc::SOCKET,
+                SOL_SOCKET,
+                SO_REUSEADDR,
+                &val as *const i32 as *const u8,
+                std::mem::size_of::<i32>() as libc::c_int,
+            )
+        };
+        if ret != 0 {
+            crate::log_warn!("setsockopt SO_REUSEADDR failed");
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let fd = socket.as_raw_fd();
+        let val: libc::c_int = 1;
+        let ret = unsafe {
+            libc::setsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_REUSEADDR,
+                &val as *const libc::c_int as *const libc::c_void,
+                std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+            )
+        };
+        if ret != 0 {
+            crate::log_warn!("setsockopt SO_REUSEADDR failed");
+        }
+    }
+    Ok(())
+}
+
+fn set_multicast_if(socket: &UdpSocket, interface: Ipv4Addr) -> Result<()> {
+    let addr = interface.octets();
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawSocket;
+        extern "system" {
+            fn setsockopt(
+                s: libc::SOCKET,
+                level: libc::c_int,
+                optname: libc::c_int,
+                optval: *const u8,
+                optlen: libc::c_int,
+            ) -> libc::c_int;
+        }
+        const IPPROTO_IP: libc::c_int = 0;
+        const IP_MULTICAST_IF: libc::c_int = 19;
+        let raw = socket.as_raw_socket();
+        let ret = unsafe {
+            setsockopt(
+                raw as libc::SOCKET,
+                IPPROTO_IP,
+                IP_MULTICAST_IF,
+                addr.as_ptr(),
+                addr.len() as libc::c_int,
+            )
+        };
+        if ret != 0 {
+            anyhow::bail!("setsockopt IP_MULTICAST_IF failed for {interface}");
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let fd = socket.as_raw_fd();
+        let ret = unsafe {
+            libc::setsockopt(
+                fd,
+                libc::IPPROTO_IP,
+                libc::IP_MULTICAST_IF,
+                addr.as_ptr() as *const libc::c_void,
+                addr.len() as libc::socklen_t,
+            )
+        };
+        if ret != 0 {
+            anyhow::bail!("setsockopt IP_MULTICAST_IF failed for {interface}");
+        }
+    }
+    Ok(())
+}
+
 fn create_multicast_senders(ips: &[Ipv4Addr]) -> Vec<MulticastSender> {
     let mut senders = Vec::new();
     for &ip in ips {
         match MulticastSender::new(ip) {
-            Ok(sender) => senders.push(sender),
+            Ok(sender) => {
+                crate::log_info!("SSDP multicast sender created for {ip}");
+                senders.push(sender);
+            }
             Err(error) => {
                 crate::log_warn!("creating SSDP sender for {ip}: {error}");
             }
