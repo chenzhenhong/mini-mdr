@@ -134,7 +134,7 @@ fn respond_to_search(
     let peer_ip = peer.ip();
     let matched_sender = senders
         .iter()
-        .find(|s| find_matching_interface(local_ips, peer_ip).map_or(false, |ip| ip == s.ip));
+        .find(|s| find_matching_interface(local_ips, peer_ip) == Some(s.ip));
     let matched_location = if let Some(sender) = matched_sender {
         format!("http://{}:{http_port}/device.xml", sender.ip)
     } else {
@@ -466,12 +466,12 @@ fn timestamp_rfc1123() -> String {
     let sec = (time_of_day % 60) as u32;
     format!(
         "{}, {day:02} {} {y} {hour:02}:{min:02}:{sec:02} GMT",
-        DAYS[weekday], MONTHS[m as usize]
+        DAYS[weekday], MONTHS[m]
     )
 }
 
 fn is_leap(y: u32) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
 }
 
 pub fn local_ip() -> Option<IpAddr> {
