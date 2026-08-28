@@ -868,7 +868,12 @@ impl UpnpError {
     }
 }
 fn player_error(error: anyhow::Error) -> UpnpError {
-    crate::log_error!("player action failed: {error:#}");
+    let already_reported = error
+        .chain()
+        .any(|e| e.to_string().contains("will not retry"));
+    if !already_reported {
+        crate::log_error!("player action failed: {error:#}");
+    }
     UpnpError::new(501, "Action Failed")
 }
 fn lock_player(
