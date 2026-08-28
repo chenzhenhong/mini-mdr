@@ -19,6 +19,7 @@ type PlatformStream = std::os::unix::net::UnixStream;
 pub struct MpvBackend {
     executable: String,
     session: Option<MpvSession>,
+    failed_permanently: bool,
 }
 
 struct MpvSession {
@@ -38,13 +39,29 @@ impl MpvBackend {
         Ok(Self {
             executable: path.to_owned(),
             session: None,
+            failed_permanently: false,
         })
     }
 
     fn session(&mut self) -> Result<&mut MpvSession> {
+        if self.failed_permanently {
+            anyhow::bail!("mpv not found, check player.mpv_path in config");
+        }
         if self.session.is_none() {
-            self.session = Some(MpvSession::start(&self.executable)?);
-            crate::log_info!("mpv process started");
+            match MpvSession::start(&self.executable) {
+                Ok(session) => {
+                    self.session = Some(session);
+                    crate::log_info!("mpv process started");
+                }
+                Err(error) => {
+                    let msg = error.to_string();
+                    if msg.contains("program not found") || msg.contains("not found") {
+                        self.failed_permanently = true;
+                        crate::log_error!("mpv not found at '{}', will not retry", self.executable);
+                    }
+                    return Err(error);
+                }
+            }
         }
         self.session.as_mut().context("mpv session did not start")
     }
