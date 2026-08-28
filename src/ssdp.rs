@@ -40,13 +40,11 @@ impl SsdpServer {
         }
 
         let socket = socket2::Socket::new(
-            socket2::AddressFamily::IPV4,
-            socket2::SocketType::DGRAM,
+            socket2::Domain::IPV4,
+            socket2::Type::DGRAM,
             Some(socket2::Protocol::UDP),
         )?;
         socket.set_reuse_address(true)?;
-        #[cfg(windows)]
-        socket.set_only_v4(true)?;
         socket.bind(&SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 1900).into())?;
         socket.set_nonblocking(false)?;
         let std_socket: UdpSocket = socket.into();
@@ -97,14 +95,7 @@ impl SsdpServer {
 
                 match std_socket.recv_from(&mut buffer) {
                     Ok((size, peer)) => {
-                        respond_to_search(
-                            &std_socket,
-                            &buffer[..size],
-                            peer,
-                            &location,
-                            &name,
-                            http_port,
-                        );
+                        respond_to_search(&std_socket, &buffer[..size], peer, &location, &name);
                     }
                     Err(error)
                         if matches!(
@@ -132,7 +123,6 @@ fn respond_to_search(
     peer: SocketAddr,
     location: &str,
     name: &str,
-    http_port: u16,
 ) {
     let request = String::from_utf8_lossy(data);
     if !request
