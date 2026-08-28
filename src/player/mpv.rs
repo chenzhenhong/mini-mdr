@@ -45,7 +45,9 @@ impl MpvBackend {
 
     fn session(&mut self) -> Result<&mut MpvSession> {
         if self.failed_permanently {
-            anyhow::bail!("mpv not found, check player.mpv_path in config");
+            return Err(super::already_reported(anyhow::anyhow!(
+                "mpv not found, check player.mpv_path in config"
+            )));
         }
         if self.session.is_none() {
             match MpvSession::start(&self.executable) {
@@ -58,7 +60,7 @@ impl MpvBackend {
                         self.failed_permanently = true;
                         crate::log_error!("mpv not found at '{}', will not retry", self.executable);
                     }
-                    return Err(error);
+                    return Err(super::already_reported(error));
                 }
             }
         }

@@ -37,7 +37,9 @@ impl VlcBackend {
 
     fn session(&mut self) -> Result<&mut VlcSession> {
         if self.failed_permanently {
-            anyhow::bail!("vlc not found, check player.vlc_path in config");
+            return Err(super::already_reported(anyhow::anyhow!(
+                "vlc not found, check player.vlc_path in config"
+            )));
         }
         if self.session.is_none() {
             match VlcSession::start(&self.executable) {
@@ -49,7 +51,7 @@ impl VlcBackend {
                         self.failed_permanently = true;
                         crate::log_error!("vlc not found at '{}', will not retry", self.executable);
                     }
-                    return Err(error);
+                    return Err(super::already_reported(error));
                 }
             }
         }

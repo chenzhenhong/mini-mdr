@@ -68,3 +68,15 @@ pub fn is_program_not_found(error: &anyhow::Error) -> bool {
     }
     false
 }
+
+pub const ALREADY_REPORTED: &str = "backend-unavailable";
+
+pub fn already_reported(error: anyhow::Error) -> anyhow::Error {
+    error.context(ALREADY_REPORTED)
+}
+
+pub fn is_already_reported(error: &anyhow::Error) -> bool {
+    error
+        .chain()
+        .any(|e| e.to_string().contains(ALREADY_REPORTED))
+}
