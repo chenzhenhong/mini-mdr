@@ -67,6 +67,21 @@ jobs:
           name: mini-mdr-linux-amd64.deb
           path: target/${{ matrix.target }}/debian/*.deb
 
+      - name: Install cargo-generate-rpm
+        if: runner.os == 'Linux'
+        run: cargo install cargo-generate-rpm
+
+      - name: Build rpm
+        if: runner.os == 'Linux'
+        run: cargo generate-rpm --target ${{ matrix.target }}
+
+      - name: Upload rpm
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v6
+        with:
+          name: mini-mdr-linux-amd64.rpm
+          path: target/${{ matrix.target }}/generate-rpm/*.rpm
+
       - name: Build dmg
         if: runner.os == 'macOS'
         run: |

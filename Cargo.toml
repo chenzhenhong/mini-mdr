@@ -42,3 +42,9 @@ identifier = "com.mini-mdr.app"
 icon = "resources/icon.icns"
 category = "public.app-category.music"
 short-description = "UPnP/DLNA MediaRenderer"
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/mini-mdr", dest = "/usr/bin/mini-mdr", mode = "755" },
+    { source = "resources/icon.png", dest = "/usr/share/icons/hicolor/256x256/apps/mini-mdr.png" },
+]

@@ -19,10 +19,10 @@ reader or Markdown renderer.
 ## Product Requirements
 
 The application must remain tray-only for application control. The tray menu
-has exactly these actions:
+structure:
 
-1. Start Cast / Stop Cast
-2. Open Settings
+1. Start/Stop Cast (checkbox)
+2. More > (submenu: Open Settings, Open Directory)
 3. Quit
 
 Start/Stop Cast controls the DMR services as a group. It is not merely a local
@@ -64,6 +64,7 @@ main
           -> SsdpServer
           -> PlayerBackend
               -> MpvBackend
+              -> VlcBackend
 ```
 
 Important dependency direction:
@@ -86,12 +87,14 @@ src/config.rs               Config defaults, load, save, and history persistence
 src/i18n.rs                 Language enum, locale detection, FluentBundle wrapper
 src/log.rs                  Panic-free stderr logging for GUI subsystem
 src/state.rs                Cast, transport, and renderer state types; HistoryEntry
-src/tray.rs                 ldtray integration, three menu actions, signal handling
-src/settings_server.rs      Loopback settings HTTP server (settings + history UI)
+src/tray.rs                 ldtray integration, tray menu (with submenu), signal handling
+src/web.rs                  Loopback settings HTTP server (settings + history UI)
 src/ssdp.rs                 SSDP multicast listener and M-SEARCH response
 src/upnp.rs                 UPnP HTTP descriptions and SOAP handling
+src/util.rs                 Byte-slice search helper
 src/player/mod.rs           PlayerBackend trait and backend factory
 src/player/mpv.rs           External mpv JSON IPC backend
+src/player/vlc.rs           VLC HTTP interface backend
 locales/en/main.ftl         English translations (Fluent format)
 locales/zh-CN/main.ftl      Chinese translations (Fluent format)
 resources/*.xml             UPnP device/service descriptions (embedded at compile time)
@@ -129,7 +132,7 @@ route — do not reintroduce inline SVG placeholders for the app icon.
 - `cargo fmt` only reformats and does **not** need the linker; it runs fine on
   this machine (which lacks MSVC `link.exe`).
 - Do not commit any `.rs` file that has not been run through `cargo fmt --all`.
-- Recommended flow: edit → `cargo fmt --all` → `git add -A` → `git commit` →
+- Recommended flow: edit -> `cargo fmt --all` -> `git add -A` -> `git commit` ->
   `git push`.
 - **`Cargo.lock` must stay in sync with `Cargo.toml`.** After any change to
   `Cargo.toml` (version bump, add/remove/change a dependency), run
@@ -144,8 +147,8 @@ route — do not reintroduce inline SVG placeholders for the app icon.
 
 - **Do not** automatically bump the `Cargo.toml` version, create a tag, or
   trigger a release.
-- Only when the user explicitly says "release一下" (release it): bump the
-  `Cargo.toml` version to the next increment (current latest tag is `v0.2.21`),
+- Only when the user explicitly says "release" (release it): bump the
+  `Cargo.toml` version to the next increment (current latest tag is `v0.2.25`),
   commit, create a `vX.Y.Z` tag, and `git push --tags`. CI builds the release
   automatically.
 - For normal feature/fix work, commit and `git push origin main` without a tag.
@@ -162,14 +165,15 @@ route — do not reintroduce inline SVG placeholders for the app icon.
 
 ```rust
 pub trait PlayerBackend: Send {
-    fn load(&mut self, uri: &str) -> anyhow::Result<()>;
-    fn play(&mut self) -> anyhow::Result<()>;
-    fn pause(&mut self) -> anyhow::Result<()>;
-    fn stop(&mut self) -> anyhow::Result<()>;
-    fn seek(&mut self, position: Duration) -> anyhow::Result<()>;
-    fn set_volume(&mut self, volume: u8) -> anyhow::Result<()>;
-    fn set_mute(&mut self, muted: bool) -> anyhow::Result<()>;
-    fn status(&mut self) -> anyhow::Result<PlayerStatus>;
+    fn load(&mut self, uri: &str, title: Option<&str>) -> Result<()>;
+    fn play(&mut self) -> Result<()>;
+    fn pause(&mut self) -> Result<()>;
+    fn stop(&mut self) -> Result<()>;
+    fn seek(&mut self, position: Duration) -> Result<()>;
+    fn set_volume(&mut self, volume: u8) -> Result<()>;
+    fn set_mute(&mut self, muted: bool) -> Result<()>;
+    fn status(&mut self) -> Result<PlayerStatus>;
+    fn sink_protocol_info(&self) -> &str;
 }
 ```
 
@@ -188,6 +192,10 @@ endpoint is unique per process (`mini-mdr-<pid>-<nanos>`), startup waits at most
 5 seconds and fails fast if mpv exits early, property reads tolerate
 unavailable properties (idle state returns defaults), and dropping the session
 kills the child and removes the socket file.
+
+The `VlcBackend` launches VLC with `--intf rc` and communicates via TCP. It
+picks a random port, authenticates with a random password, and sends commands
+as text lines. It starts lazily on the first `load` call.
 
 ## UPnP/DLNA Scope
 
@@ -217,14 +225,14 @@ Implemented today:
 - GENA: SID issuance, renewal via `SID` header, timeout clamping to 60..86400s,
   expiry cleanup, initial + change notifications with `SEQ`, XML-escaped
   `LastChange`
+- `SinkProtocolInfo` derived from the active backend via
+  `PlayerBackend::sink_protocol_info()`
 
 Known simplifications:
 
 - Requests are handled sequentially per connection; heavy polling clients can
   starve others.
 - `TrackMetaData` is empty (no DIDLLite).
-- The protocol info list is static (`SINK_PROTOCOL_INFO` const); it does not
-  come from the active player backend.
 - UDN is the constant `uuid:mini-mdr`; it is not a persistent per-install UUID,
   so two instances cannot run on one LAN.
 - SSDP binds all interfaces and picks a single local IP for `LOCATION`.
@@ -239,9 +247,8 @@ Priority protocol work:
    player/state locks short.
 2. Persist a stable per-install UDN in the config file.
 3. Emit minimal DIDLLite for `TrackMetaData`/`CurrentURIMetaData`.
-4. Derive `SinkProtocolInfo` from the active backend (add a trait method).
-5. Handle multiple network interfaces for SSDP `LOCATION`.
-6. Add integration tests that drive HTTP/SOAP routing end-to-end.
+4. Handle multiple network interfaces for SSDP `LOCATION`.
+5. Add integration tests that drive HTTP/SOAP routing end-to-end.
 
 ## Configuration
 
@@ -254,10 +261,12 @@ name = "mini-mdr(<hostname>)"   # hostname from $HOSTNAME or $HOST
 [player]
 backend = "mpv"
 mpv_path = "mpv"
+vlc_path = "vlc"
 
 [settings]
 port = 7878
 max_history = 200
+language = ""                    # empty = system default
 ```
 
 Device name includes the system hostname by default (e.g., `mini-mdr(laptop)`).
@@ -292,7 +301,6 @@ new fields by using serde defaults or an explicit migration strategy.
 - Do not silently discard fallible operations. Log or propagate errors.
 - Keep platform-specific behavior behind the relevant abstraction.
 - Avoid adding a runtime plugin ABI unless explicitly requested.
-- Keep the tray menu limited to the three product actions.
 - Use ASCII in source and documentation unless a user-facing localized label
   requires otherwise.
 - SSE: `GET /events` pushes `status` / `history` by watching `history.json`
@@ -340,5 +348,5 @@ Protocol verification should check:
   production-grade HTTP stacks.
 - A DMC will accept every simplified XML response (especially empty
   `TrackMetaData`).
-- `mpv` is installed on the target machine; without it, Cast still starts and
-  playback actions return UPnP 501 faults.
+- `mpv` or `vlc` is installed on the target machine; without a working backend,
+  Cast still starts and playback actions return UPnP 501 faults.
