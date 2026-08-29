@@ -26,6 +26,15 @@ const ADVERTISED_TARGETS: [&str; 6] = [
     SERVICE_CONNECTION_MANAGER,
 ];
 
+/// Seconds after startup during which alive notifications are sent at a high
+/// frequency so a controller that starts scanning a few seconds later still
+/// discovers the device on cold start.
+const WARMUP_SECS: u64 = 60;
+/// Alive-notification interval during the warmup window.
+const WARMUP_INTERVAL_SECS: u64 = 2;
+/// Steady-state alive-notification interval after the warmup window.
+const STEADY_ANNOUNCE_SECS: u64 = 900;
+
 pub struct SsdpServer {
     running: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
@@ -38,10 +47,21 @@ impl SsdpServer {
         socket.set_read_timeout(Some(Duration::from_millis(300)))?;
         socket.set_multicast_loop_v4(true)?;
         set_reuse_addr(&socket)?;
-        if let Err(error) =
-            socket.join_multicast_v4(&Ipv4Addr::new(239, 255, 255, 250), &Ipv4Addr::UNSPECIFIED)
+        let group = Ipv4Addr::new(239, 255, 255, 250);
+        let local_ips = list_local_ipv4();
+        if socket
+            .join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED)
+            .is_err()
         {
-            crate::log_warn!("SSDP multicast join failed: {error}");
+            let mut joined_any = false;
+            for ip in &local_ips {
+                if socket.join_multicast_v4(&group, ip).is_ok() {
+                    joined_any = true;
+                }
+            }
+            if !joined_any {
+                crate::log_warn!("SSDP multicast join failed on all interfaces");
+            }
         }
         let running = Arc::new(AtomicBool::new(true));
         let active = Arc::clone(&running);
@@ -50,7 +70,6 @@ impl SsdpServer {
             for (ifname, ip) in list_afinet_netifas().unwrap_or_default() {
                 crate::log_info!("[ssdp-diag] iface {ifname} = {ip}");
             }
-            let local_ips = list_local_ipv4();
             crate::log_info!("[ssdp-diag] filtered local_ips = {local_ips:?}");
             let best_ip = find_best_local_ip(&local_ips);
             crate::log_info!("[ssdp-diag] best_ip = {best_ip}");
@@ -65,8 +84,8 @@ impl SsdpServer {
                 announce(&senders, http_port, &name, "ssdp:alive");
                 thread::sleep(Duration::from_millis(200));
             }
+            let warmup_until = Instant::now() + Duration::from_secs(WARMUP_SECS);
             let mut last_announce = Instant::now();
-            let mut reannounce_at = Some(Instant::now() + Duration::from_secs(3));
             let mut buffer = [0; 4096];
             while active.load(Ordering::Relaxed) {
                 match socket.recv_from(&mut buffer) {
@@ -91,15 +110,15 @@ impl SsdpServer {
                         break;
                     }
                 }
-                if last_announce.elapsed() >= Duration::from_secs(900) {
+                let now = Instant::now();
+                let interval = if now < warmup_until {
+                    Duration::from_secs(WARMUP_INTERVAL_SECS)
+                } else {
+                    Duration::from_secs(STEADY_ANNOUNCE_SECS)
+                };
+                if now.duration_since(last_announce) >= interval {
                     announce(&senders, http_port, &name, "ssdp:alive");
-                    last_announce = Instant::now();
-                }
-                if let Some(at) = reannounce_at
-                    && at <= Instant::now()
-                {
-                    announce(&senders, http_port, &name, "ssdp:alive");
-                    reannounce_at = None;
+                    last_announce = now;
                 }
             }
             announce(&senders, http_port, &name, "ssdp:byebye");
@@ -571,5 +590,59 @@ mod tests {
         let ts = timestamp_rfc1123();
         assert!(ts.ends_with(" GMT"));
         assert!(ts.contains("2026"));
+    }
+
+    #[test]
+    fn responds_to_m_search_with_200_ok() {
+        let device = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        let phone = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        phone
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let peer = phone.local_addr().unwrap();
+        let local_ips = vec![Ipv4Addr::LOCALHOST];
+        let msearch = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 5\r\nST: ssdp:all\r\n\r\n";
+        respond_to_search(
+            &device,
+            msearch.as_bytes(),
+            peer,
+            "http://127.0.0.1:7878/device.xml",
+            "mini-mdr",
+            &local_ips,
+            7878,
+        );
+        let mut buf = [0; 4096];
+        let (n, _from) = phone.recv_from(&mut buf).unwrap();
+        let response = String::from_utf8_lossy(&buf[..n]);
+        assert!(response.starts_with("HTTP/1.1 200 OK"), "got: {response}");
+        assert!(response.contains("LOCATION: http://127.0.0.1:7878/device.xml"));
+        assert!(response.contains("ST: upnp:rootdevice"));
+        assert!(response.contains(&format!("USN: {UDN}::upnp:rootdevice")));
+    }
+
+    #[test]
+    fn responds_to_udn_search_with_device_usn() {
+        let device = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        let phone = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        phone
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let peer = phone.local_addr().unwrap();
+        let local_ips = vec![Ipv4Addr::LOCALHOST];
+        let msearch = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 5\r\nST: uuid:mini-mdr\r\n\r\n";
+        respond_to_search(
+            &device,
+            msearch.as_bytes(),
+            peer,
+            "http://127.0.0.1:7878/device.xml",
+            "mini-mdr",
+            &local_ips,
+            7878,
+        );
+        let mut buf = [0; 4096];
+        let (n, _from) = phone.recv_from(&mut buf).unwrap();
+        let response = String::from_utf8_lossy(&buf[..n]);
+        assert!(response.contains(&format!("ST: {UDN}")));
+        assert!(response.contains(&format!("USN: {UDN}")));
     }
 }
