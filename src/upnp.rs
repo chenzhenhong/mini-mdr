@@ -980,6 +980,9 @@ fn parse_http_url(url: &str) -> Result<HttpTarget> {
         .split_once('/')
         .map(|(authority, path)| (authority, format!("/{path}")))
         .unwrap_or((remainder, "/".into()));
+    if authority.is_empty() {
+        anyhow::bail!("callback host is empty");
+    }
     let socket_authority = if authority
         .rsplit_once(':')
         .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
