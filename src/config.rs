@@ -127,8 +127,7 @@ impl Config {
         let has_udn = text
             .parse::<toml::Value>()
             .ok()
-            .and_then(|value| value.get("device").and_then(|device| device.get("udn")))
-            .is_some();
+            .is_some_and(|value| value.get("device").and_then(|d| d.get("udn")).is_some());
         match toml::from_str::<Self>(&text) {
             Ok(mut config) => {
                 // Normalize values that older or hand-edited files may carry,
@@ -147,10 +146,8 @@ impl Config {
                     config.settings.max_history = normalized;
                     changed = true;
                 }
-                if changed {
-                    if let Err(error) = config.save() {
-                        crate::log_warn!("could not persist normalized configuration: {error:#}");
-                    }
+                if changed && let Err(error) = config.save() {
+                    crate::log_warn!("could not persist normalized configuration: {error:#}");
                 }
                 crate::log_info!("configuration loaded from {}", path.display());
                 Ok(config)

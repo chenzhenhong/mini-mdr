@@ -262,6 +262,7 @@ impl UpnpServer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn serve(
     mut stream: TcpStream,
     name: &str,
@@ -310,6 +311,7 @@ fn serve(
     write_response(&mut stream, response)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn route(
     request: &HttpRequest,
     name: &str,

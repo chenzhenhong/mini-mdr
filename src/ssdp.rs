@@ -134,6 +134,7 @@ impl SsdpServer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn respond_to_search(
     socket: &UdpSocket,
     data: &[u8],

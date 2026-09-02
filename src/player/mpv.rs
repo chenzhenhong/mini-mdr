@@ -209,10 +209,10 @@ impl PlayerBackend for MpvBackend {
             command["options"] = json!({"force-media-title": title});
         }
         self.command(command)?;
-        if let Some(title) = title {
-            if let Err(error) = self.command(json!({"command": ["set_property", "title", title]})) {
-                crate::log_warn!("setting mpv window title failed: {:#}", error);
-            }
+        if let Some(title) = title
+            && let Err(error) = self.command(json!({"command": ["set_property", "title", title]}))
+        {
+            crate::log_warn!("setting mpv window title failed: {:#}", error);
         }
         Ok(())
     }
