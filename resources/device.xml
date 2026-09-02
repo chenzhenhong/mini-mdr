@@ -9,7 +9,7 @@
     <friendlyName>{{DEVICE_NAME}}</friendlyName>
     <manufacturer>mini-mdr</manufacturer>
     <modelName>mini-mdr</modelName>
-    <UDN>uuid:mini-mdr</UDN>
+    <UDN>{{UDN}}</UDN>
     <serviceList>
       <service>
         <serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>

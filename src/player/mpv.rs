@@ -10,6 +10,7 @@ use std::{
 };
 
 const IPC_RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+const EXIT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(windows)]
 type PlatformStream = std::fs::File;
@@ -116,6 +117,7 @@ impl MpvSession {
                     }
                     if started.elapsed() >= Duration::from_secs(5) {
                         let _ = child.kill();
+                        let _ = child.wait();
                         return Err(error).context("timed out waiting for mpv JSON IPC");
                     }
                     thread::sleep(Duration::from_millis(40));
@@ -166,7 +168,11 @@ impl MpvSession {
         Ok(value)
     }
 
-    fn raw_command(&mut self, mut command: Value) -> Result<Value> {
+    fn raw_command(&mut self, command: Value) -> Result<Value> {
+        self.raw_command_until(Instant::now() + IPC_RESPONSE_TIMEOUT, command)
+    }
+
+    fn raw_command_until(&mut self, deadline: Instant, mut command: Value) -> Result<Value> {
         let id = self.next_request;
         self.next_request += 1;
         command["request_id"] = json!(id);
@@ -174,7 +180,6 @@ impl MpvSession {
         self.writer.write_all(b"\n")?;
         self.writer.flush()?;
 
-        let deadline = Instant::now() + IPC_RESPONSE_TIMEOUT;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
@@ -205,7 +210,9 @@ impl PlayerBackend for MpvBackend {
         }
         self.command(command)?;
         if let Some(title) = title {
-            let _ = self.command(json!({"command": ["set_property", "title", title]}));
+            if let Err(error) = self.command(json!({"command": ["set_property", "title", title]})) {
+                crate::log_warn!("setting mpv window title failed: {:#}", error);
+            }
         }
         Ok(())
     }
@@ -261,14 +268,17 @@ impl PlayerBackend for MpvBackend {
         if self.session.is_none() {
             return Ok(PlayerStatus::default());
         }
-        let idle = self.get_bool("idle-active", true);
-        let paused = self.get_bool("pause", false);
-        let position = self.get_f64("time-pos", 0.0).max(0.0);
+        // Share one deadline across all six property reads so a hung mpv can
+        // stall the caller for at most IPC_RESPONSE_TIMEOUT, not 6x that.
+        let deadline = Instant::now() + IPC_RESPONSE_TIMEOUT;
+        let idle = self.get_bool("idle-active", true, deadline);
+        let paused = self.get_bool("pause", false, deadline);
+        let position = self.get_f64("time-pos", 0.0, deadline).max(0.0);
         let duration = self
-            .get_optional_f64("duration")
+            .get_optional_f64("duration", deadline)
             .map(Duration::from_secs_f64);
-        let volume = self.get_f64("volume", 100.0).clamp(0.0, 100.0) as u8;
-        let muted = self.get_bool("mute", false);
+        let volume = self.get_f64("volume", 100.0, deadline).clamp(0.0, 100.0) as u8;
+        let muted = self.get_bool("mute", false, deadline);
         Ok(PlayerStatus {
             playing: !idle && !paused,
             paused: !idle && paused,
@@ -296,26 +306,28 @@ impl PlayerBackend for MpvBackend {
 }
 
 impl MpvBackend {
-    fn property(&mut self, name: &str) -> Value {
+    fn property(&mut self, name: &str, deadline: Instant) -> Value {
         let response = self
             .session()
-            .and_then(|session| session.raw_command(json!({"command": ["get_property", name]})))
+            .and_then(|session| {
+                session.raw_command_until(deadline, json!({"command": ["get_property", name]}))
+            })
             .ok();
         response
             .and_then(|value| value.get("data").cloned())
             .unwrap_or(Value::Null)
     }
 
-    fn get_bool(&mut self, name: &str, default: bool) -> bool {
-        self.property(name).as_bool().unwrap_or(default)
+    fn get_bool(&mut self, name: &str, default: bool, deadline: Instant) -> bool {
+        self.property(name, deadline).as_bool().unwrap_or(default)
     }
 
-    fn get_f64(&mut self, name: &str, default: f64) -> f64 {
-        self.property(name).as_f64().unwrap_or(default)
+    fn get_f64(&mut self, name: &str, default: f64, deadline: Instant) -> f64 {
+        self.property(name, deadline).as_f64().unwrap_or(default)
     }
 
-    fn get_optional_f64(&mut self, name: &str) -> Option<f64> {
-        self.property(name).as_f64()
+    fn get_optional_f64(&mut self, name: &str, deadline: Instant) -> Option<f64> {
+        self.property(name, deadline).as_f64()
     }
 }
 
@@ -336,8 +348,26 @@ impl Drop for MpvSession {
         {
             crate::log_error!("stopping mpv: {error}");
         }
-        if let Err(error) = self.child.wait() {
-            crate::log_error!("waiting for mpv: {error}");
+        // Reap the child within a bounded window so a stuck mpv cannot stall
+        // application shutdown indefinitely.
+        let deadline = Instant::now() + EXIT_WAIT_TIMEOUT;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if Instant::now() >= deadline {
+                        crate::log_warn!(
+                            "mpv did not exit within {EXIT_WAIT_TIMEOUT:?} of shutdown"
+                        );
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => {
+                    crate::log_error!("waiting for mpv: {error}");
+                    break;
+                }
+            }
         }
         #[cfg(unix)]
         if let Err(error) = std::fs::remove_file(&self.socket_path)

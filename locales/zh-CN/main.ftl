@@ -41,6 +41,9 @@ tab-guide = 教程
 about-title = 关于
 about-subtitle = 了解更多关于 mini-mdr 的信息。
 about-description = mini-mdr 是一个仅驻留系统托盘的 UPnP/DLNA 媒体渲染器（DMR）。它会在局域网内广播 DMR，并通过 mpv 或 VLC 播放媒体。
+about-version = 版本
+about-repository = 代码仓库
+about-license = 许可证
 
 # Guide page
 guide-title = 教程
@@ -59,10 +62,13 @@ error-name-control = 设备名称不能包含控制字符
 error-unsupported-backend = 不支持的播放器后端
 error-player-path-empty = 播放器可执行文件路径不能为空
 error-language-invalid = 未知的语言选择
+error-cross-origin = 不允许跨源请求
+error-not-found = 未找到
 
 # State display
 cast-stopped = 已停止
 cast-running = 运行中
+status-upnp = UPnP
 transport-no-media = 无媒体
 transport-stopped = 已停止
 transport-playing = 播放中

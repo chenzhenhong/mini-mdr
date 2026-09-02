@@ -8,10 +8,10 @@ use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::{Shutdown, SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{Receiver, RecvTimeoutError, Sender, channel},
     },
     thread,
@@ -26,37 +26,69 @@ enum SettingsEvent {
     History(String),
 }
 
-static EVENTS: OnceLock<Mutex<Vec<Sender<SettingsEvent>>>> = OnceLock::new();
-static WATCHER: OnceLock<Mutex<RecommendedWatcher>> = OnceLock::new();
+struct Subscriber {
+    id: u64,
+    sender: Sender<SettingsEvent>,
+}
 
-fn events() -> &'static Mutex<Vec<Sender<SettingsEvent>>> {
+static EVENTS: OnceLock<Mutex<Vec<Subscriber>>> = OnceLock::new();
+static NEXT_SUBSCRIBER_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+static WATCHER: OnceLock<Mutex<RecommendedWatcher>> = OnceLock::new();
+/// Serializes the whole config read-modify-save-commit cycle so that two
+/// concurrent `POST /settings` requests cannot lose each other's updates.
+static CONFIG_SAVE_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn events() -> &'static Mutex<Vec<Subscriber>> {
     EVENTS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-fn subscribe() -> Receiver<SettingsEvent> {
-    let (tx, rx) = channel();
+struct Subscription {
+    id: u64,
+    receiver: Receiver<SettingsEvent>,
+}
+
+fn subscribe() -> Subscription {
+    let (sender, receiver) = channel();
+    let id = NEXT_SUBSCRIBER_ID.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut subscribers) = events().lock() {
-        subscribers.push(tx);
+        subscribers.push(Subscriber { id, sender });
     }
-    rx
+    Subscription { id, receiver }
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        if let Ok(mut subscribers) = events().lock() {
+            subscribers.retain(|subscriber| subscriber.id != self.id);
+        }
+    }
 }
 
 pub fn publish_status(running: bool, address: Option<String>) {
     if let Ok(mut subscribers) = events().lock() {
-        subscribers.retain(|tx| {
-            tx.send(SettingsEvent::Status {
-                running,
-                address: address.clone(),
-            })
-            .is_ok()
+        subscribers.retain(|subscriber| {
+            subscriber
+                .sender
+                .send(SettingsEvent::Status {
+                    running,
+                    address: address.clone(),
+                })
+                .is_ok()
         });
     }
 }
 
 pub fn publish_history() {
-    let payload = history_payload();
+    let limit = crate::config::Config::max_history_from_disk();
+    let payload = history_payload(limit);
     if let Ok(mut subscribers) = events().lock() {
-        subscribers.retain(|tx| tx.send(SettingsEvent::History(payload.clone())).is_ok());
+        subscribers.retain(|subscriber| {
+            subscriber
+                .sender
+                .send(SettingsEvent::History(payload.clone()))
+                .is_ok()
+        });
     }
 }
 
@@ -66,12 +98,15 @@ pub fn init_watcher() {
     }
     let dir = match crate::config::Config::config_dir() {
         Ok(dir) => dir,
-        Err(_) => {
-            crate::log_warn!("cannot determine config directory for file watcher");
+        Err(error) => {
+            crate::log_warn!("cannot determine config directory for file watcher: {error:#}");
             return;
         }
     };
-    let _ = std::fs::create_dir_all(&dir);
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        crate::log_warn!("cannot create config directory for file watcher: {error:#}");
+        return;
+    }
     let handler = move |res: std::result::Result<Event, notify::Error>| {
         if let Ok(event) = res
             && event
@@ -82,18 +117,74 @@ pub fn init_watcher() {
             publish_history();
         }
     };
-    if let Ok(mut watcher) = notify::recommended_watcher(handler) {
-        let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
-        let _ = WATCHER.set(Mutex::new(watcher));
-    } else {
-        crate::log_warn!("failed to start config file watcher");
+    let mut watcher = match notify::recommended_watcher(handler) {
+        Ok(watcher) => watcher,
+        Err(error) => {
+            crate::log_warn!("failed to start config file watcher: {error:#}");
+            return;
+        }
+    };
+    if let Err(error) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
+        crate::log_warn!("cannot watch config directory for changes: {error:#}");
+        return;
     }
+    if WATCHER.set(Mutex::new(watcher)).is_err() {
+        crate::log_warn!("config file watcher already initialized");
+    }
+}
+
+/// RAII guard that unregisters a connection clone when the request thread
+/// finishes, so `SettingsServer::drop` can shut down only live connections.
+struct TrackedConnection {
+    id: u64,
+    connections: Arc<Mutex<HashMap<u64, TcpStream>>>,
+}
+
+impl Drop for TrackedConnection {
+    fn drop(&mut self) {
+        if let Ok(mut connections) = self.connections.lock() {
+            connections.remove(&self.id);
+        }
+    }
+}
+
+/// Registers a duplicate handle to `stream` so the server can `shutdown` it to
+/// unblock a request thread stuck in a read or write. Returns `None` when the
+/// connection could not be registered; the caller must then close the stream
+/// instead of serving it untracked.
+fn track_connection(
+    connections: &Arc<Mutex<HashMap<u64, TcpStream>>>,
+    stream: &TcpStream,
+) -> Option<TrackedConnection> {
+    let clone = match stream.try_clone() {
+        Ok(clone) => clone,
+        Err(error) => {
+            crate::log_warn!("cannot track settings connection: {error}");
+            return None;
+        }
+    };
+    let id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+    match connections.lock() {
+        Ok(mut tracked) => {
+            tracked.insert(id, clone);
+        }
+        Err(_) => {
+            crate::log_warn!("settings connection registry unavailable; refusing request");
+            return None;
+        }
+    }
+    Some(TrackedConnection {
+        id,
+        connections: Arc::clone(connections),
+    })
 }
 
 pub struct SettingsServer {
     pub address: SocketAddr,
     running: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
+    connections: Arc<Mutex<HashMap<u64, TcpStream>>>,
+    requests: Arc<Mutex<Vec<thread::JoinHandle<()>>>>,
 }
 
 impl SettingsServer {
@@ -112,7 +203,11 @@ impl SettingsServer {
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
         let running = Arc::new(AtomicBool::new(true));
+        let connections: Arc<Mutex<HashMap<u64, TcpStream>>> = Arc::new(Mutex::new(HashMap::new()));
+        let requests: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(Vec::new()));
         let active = Arc::clone(&running);
+        let tracked = Arc::clone(&connections);
+        let handles = Arc::clone(&requests);
         let thread = thread::Builder::new()
             .name("settings-server".into())
             .spawn(move || {
@@ -122,13 +217,41 @@ impl SettingsServer {
                             let config = Arc::clone(&config);
                             let state = Arc::clone(&state);
                             let active = Arc::clone(&active);
-                            thread::spawn(move || {
+                            let tracked = Arc::clone(&tracked);
+                            let handles = Arc::clone(&handles);
+                            // Register the connection before spawning the
+                            // request thread. A concurrent `SettingsServer::drop`
+                            // can otherwise clear the registry and join the
+                            // accept thread while the request thread has not
+                            // registered itself yet, leaving a live socket that
+                            // is never shut down.
+                            let Some(guard) = track_connection(&tracked, &stream) else {
+                                crate::log_warn!("cannot track settings connection; closing it");
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            };
+                            let handle = thread::spawn(move || {
+                                // The guard unregisters the connection when the
+                                // request thread finishes, matching the thread's
+                                // own lifetime.
+                                let _guard = guard;
+                                // Bail out early when the server is shutting
+                                // down: `drop` may have already cleared the
+                                // connection registry, so serving could
+                                // otherwise block until the read timeout.
+                                if !active.load(Ordering::Relaxed) {
+                                    return;
+                                }
                                 if let Err(error) =
                                     serve(&mut stream, address, &config, &state, &active)
                                 {
                                     crate::log_error!("settings request failed: {error:#}");
                                 }
                             });
+                            if let Ok(mut pending) = handles.lock() {
+                                pending.retain(|pending| !pending.is_finished());
+                                pending.push(handle);
+                            }
                         }
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(50));
@@ -145,6 +268,8 @@ impl SettingsServer {
             address,
             running,
             thread: Some(thread),
+            connections,
+            requests,
         })
     }
 }
@@ -157,6 +282,7 @@ fn serve(
     running: &Arc<AtomicBool>,
 ) -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     let request = match read_request(stream) {
         Ok(req) => req,
         Err(_) => {
@@ -169,6 +295,9 @@ fn serve(
             return Ok(());
         }
     };
+    if !running.load(Ordering::Relaxed) {
+        return Ok(());
+    }
     let first_line = request.lines().next().unwrap_or_default();
     let mut parts = first_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
@@ -179,6 +308,10 @@ fn serve(
         .map(|c| c.settings.language.clone())
         .unwrap_or_default();
     let lang = crate::i18n::resolve_language(&cfg_language);
+    let history_limit = config
+        .lock()
+        .map(|c| c.settings.max_history)
+        .unwrap_or(crate::config::DEFAULT_MAX_HISTORY);
 
     if !same_origin(&headers, address) {
         crate::log_warn!(
@@ -192,7 +325,7 @@ fn serve(
             stream,
             "403 Forbidden",
             "text/plain; charset=utf-8",
-            "cross-origin requests are not allowed\n",
+            &format!("{}\n", t(lang, "error-cross-origin")),
         );
     }
 
@@ -254,6 +387,10 @@ fn serve(
             let guide_config_text = t(lang, "guide-config-text");
             let guide_usage_heading = t(lang, "guide-usage-heading");
             let guide_usage_text = t(lang, "guide-usage-text");
+            let status_upnp = t(lang, "status-upnp");
+            let about_version = t(lang, "about-version");
+            let about_repository = t(lang, "about-repository");
+            let about_license = t(lang, "about-license");
             let config_dir = crate::config::Config::config_dir()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
@@ -315,6 +452,10 @@ fn serve(
                 ("ABOUT_TITLE", about_title.as_str()),
                 ("ABOUT_SUBTITLE", about_subtitle.as_str()),
                 ("ABOUT_DESC", about_desc.as_str()),
+                ("ABOUT_VERSION", about_version.as_str()),
+                ("ABOUT_REPOSITORY", about_repository.as_str()),
+                ("ABOUT_LICENSE", about_license.as_str()),
+                ("STATUS_UPNP", status_upnp.as_str()),
                 ("GUIDE_TITLE", guide_title.as_str()),
                 ("GUIDE_INTRO", guide_intro.as_str()),
                 ("GUIDE_PLAYER_HEADING", guide_player_heading.as_str()),
@@ -331,10 +472,10 @@ fn serve(
             respond(stream, "200 OK", "text/html; charset=utf-8", &body)
         }
         ("GET", "/history") => {
-            let body = history_payload();
+            let body = history_payload(history_limit);
             respond(stream, "200 OK", "application/json; charset=utf-8", &body)
         }
-        ("GET", "/events") => sse_stream(stream, state, running),
+        ("GET", "/events") => sse_stream(stream, state, running, history_limit),
         ("GET", "/icon.png") => serve_asset(
             stream,
             "icon.png",
@@ -368,7 +509,7 @@ fn serve(
             stream,
             "404 Not Found",
             "text/plain; charset=utf-8",
-            "Not found\n",
+            &format!("{}\n", t(lang, "error-not-found")),
         ),
     }
 }
@@ -423,7 +564,20 @@ fn same_origin(headers: &HashMap<String, String>, address: SocketAddr) -> bool {
     {
         return false;
     }
+    if headers
+        .get("sec-fetch-site")
+        .is_some_and(|value| value.eq_ignore_ascii_case("cross-site"))
+    {
+        return false;
+    }
     true
+}
+
+fn config_save_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
+    CONFIG_SAVE_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| anyhow::anyhow!("config save lock poisoned"))
 }
 
 fn update_config(
@@ -450,8 +604,8 @@ fn update_config(
     let max_history = fields
         .get("max_history")
         .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(200)
-        .min(10000);
+        .map(crate::config::normalize_max_history)
+        .unwrap_or(crate::config::DEFAULT_MAX_HISTORY);
     let language = fields
         .get("language")
         .map(|value| value.trim())
@@ -468,19 +622,37 @@ fn update_config(
     if backend != "mpv" && backend != "vlc" {
         anyhow::bail!(t(lang, "error-unsupported-backend"));
     }
-    if mpv_path.is_empty() && vlc_path.is_empty() {
+    let active_path = if backend == "mpv" {
+        &mpv_path
+    } else {
+        &vlc_path
+    };
+    if active_path.is_empty() {
         anyhow::bail!(t(lang, "error-player-path-empty"));
     }
+    // Serialize the whole read-modify-save-commit cycle so concurrent saves
+    // cannot overwrite each other. The config mutex is only held while
+    // cloning and committing the in-memory value; disk IO happens in between
+    // without holding the config lock.
+    let _save_guard = config_save_lock()?;
+    let updated = {
+        let guard = config
+            .lock()
+            .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?;
+        let mut updated = guard.clone();
+        updated.device.name = name.to_owned();
+        updated.player.backend = backend.to_owned();
+        updated.player.mpv_path = mpv_path.to_owned();
+        updated.player.vlc_path = vlc_path.to_owned();
+        updated.settings.max_history = max_history;
+        updated.settings.language = language.to_owned();
+        updated
+    };
+    updated.save()?;
     let mut guard = config
         .lock()
         .map_err(|_| anyhow::anyhow!("configuration lock poisoned"))?;
-    guard.device.name = name.to_owned();
-    guard.player.backend = backend.to_owned();
-    guard.player.mpv_path = mpv_path.to_owned();
-    guard.player.vlc_path = vlc_path.to_owned();
-    guard.settings.max_history = max_history;
-    guard.settings.language = language.to_owned();
-    guard.save()?;
+    *guard = updated;
     crate::i18n::set_lang(crate::i18n::resolve_language(language));
     crate::tray::refresh_menu();
     Ok(())
@@ -577,8 +749,11 @@ fn history_payload_from(entries: &[crate::state::HistoryEntry]) -> String {
     serde_json::json!({ "entries": items }).to_string()
 }
 
-fn history_payload() -> String {
-    history_payload_from(&read_history_file().unwrap_or_default())
+fn history_payload(limit: usize) -> String {
+    let entries = read_history_file().unwrap_or_default();
+    let limit = limit.max(1);
+    let start = entries.len().saturating_sub(limit);
+    history_payload_from(&entries[start..])
 }
 
 fn send_event(stream: &mut TcpStream, name: &str, data: &str) -> bool {
@@ -589,10 +764,18 @@ fn send_event(stream: &mut TcpStream, name: &str, data: &str) -> bool {
     }
 }
 
+fn send_comment(stream: &mut TcpStream) -> bool {
+    stream
+        .write_all(b": ping\n\n")
+        .and_then(|()| stream.flush())
+        .is_ok()
+}
+
 fn sse_stream(
     stream: &mut TcpStream,
     state: &Arc<Mutex<RendererState>>,
     running: &Arc<AtomicBool>,
+    history_limit: usize,
 ) -> Result<()> {
     stream.write_all(
         b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: keep-alive\r\n\r\n",
@@ -615,16 +798,20 @@ fn sse_stream(
     ) {
         return Ok(());
     }
-    if !send_event(stream, "history", &history_payload()) {
+    if !send_event(stream, "history", &history_payload(history_limit)) {
         return Ok(());
     }
 
-    let rx = subscribe();
+    let subscription = subscribe();
+    let mut ticks = 0u32;
     loop {
         if !running.load(Ordering::Relaxed) {
             break;
         }
-        match rx.recv_timeout(Duration::from_millis(500)) {
+        match subscription
+            .receiver
+            .recv_timeout(Duration::from_millis(500))
+        {
             Ok(SettingsEvent::Status { running, address }) => {
                 if !send_event(
                     stream,
@@ -639,7 +826,12 @@ fn sse_stream(
                     break;
                 }
             }
-            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Timeout) => {
+                ticks += 1;
+                if ticks % 30 == 0 && !send_comment(stream) {
+                    break;
+                }
+            }
             Err(_) => break,
         }
     }
@@ -687,10 +879,49 @@ fn escape_html(value: &str) -> String {
 impl Drop for SettingsServer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
+        // Shut down every tracked connection so request threads blocked in a
+        // read or write return immediately instead of waiting for a timeout.
+        if let Ok(mut connections) = self.connections.lock() {
+            for stream in connections.values() {
+                if let Err(error) = stream.shutdown(Shutdown::Both)
+                    && error.kind() != std::io::ErrorKind::NotConnected
+                {
+                    crate::log_warn!("shutting down settings connection: {error}");
+                }
+            }
+            connections.clear();
+        }
+        // Stop the accept loop.
         if let Some(thread) = self.thread.take()
             && let Err(error) = thread.join()
         {
             crate::log_error!("settings thread panicked: {error:?}");
+        }
+        // Reap the request threads. Their sockets are already shut down and
+        // `running` is false, so give them a short grace period, then join the
+        // finished ones and detach any stragglers (they still exit on their
+        // own instead of lingering forever).
+        let pending: Vec<thread::JoinHandle<()>> = self
+            .requests
+            .lock()
+            .map(|mut handles| handles.drain(..).collect())
+            .unwrap_or_default();
+        if !pending.is_empty() {
+            for _ in 0..100 {
+                if pending.iter().all(|handle| handle.is_finished()) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+        for handle in pending {
+            if handle.is_finished() {
+                if let Err(error) = handle.join() {
+                    crate::log_error!("settings request thread panicked: {error:?}");
+                }
+            } else {
+                crate::log_warn!("settings request thread still busy at shutdown; detaching");
+            }
         }
     }
 }
@@ -725,7 +956,19 @@ mod tests {
         assert!(!same_origin(&headers, address));
         headers.remove("origin");
         headers.insert("sec-fetch-site".into(), "cross-site".into());
+        assert!(!same_origin(&headers, address));
+        headers.insert("sec-fetch-site".into(), "same-origin".into());
         assert!(same_origin(&headers, address));
+        headers.insert("sec-fetch-site".into(), "none".into());
+        assert!(same_origin(&headers, address));
+    }
+
+    #[test]
+    fn subscription_removed_on_drop() {
+        let subscription = subscribe();
+        assert_eq!(events().lock().unwrap().len(), 1);
+        drop(subscription);
+        assert_eq!(events().lock().unwrap().len(), 0);
     }
 
     #[test]

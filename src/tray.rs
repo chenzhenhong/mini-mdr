@@ -27,6 +27,14 @@ pub fn refresh_menu() {
     }
 }
 
+/// Records the authoritative cast state reported by the application and
+/// refreshes the tray menu so the Start/Stop Cast checkbox cannot desync from
+/// the actual DMR state after a failed toggle or auto-start.
+pub fn set_casting(casting: bool) {
+    CASTING.store(casting, Ordering::Relaxed);
+    refresh_menu();
+}
+
 fn menu(casting: bool, lang: Language) -> Menu {
     let toggle = t(lang, "tray-cast");
     let quit = t(lang, "tray-quit");
@@ -49,11 +57,14 @@ fn menu(casting: bool, lang: Language) -> Menu {
 pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
     let icon = tray_icon()?;
     let lang = crate::i18n::lang();
-    CASTING.store(true, Ordering::Relaxed);
+    // Honor any cast state the application has already published (for example
+    // when auto-start failed before the tray finished initializing) instead of
+    // forcing the checkbox on.
+    let casting = CASTING.load(Ordering::Relaxed);
     let tray = match Tray::new(
         TrayConfig::new(icon)
             .tooltip("mini-mdr")
-            .menu(menu(true, lang)),
+            .menu(menu(casting, lang)),
     ) {
         Ok(tray) => tray,
         Err(error) => {
@@ -62,7 +73,9 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
         }
     };
     let handle = tray.handle();
-    let _ = TRAY_HANDLE.set(handle.clone());
+    if TRAY_HANDLE.set(handle.clone()).is_err() {
+        crate::log_warn!("tray handle was already registered");
+    }
 
     let quit_flag = Arc::new(AtomicBool::new(false));
     if signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&quit_flag)).is_err() {
@@ -107,8 +120,18 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
                 TOGGLE_CAST => Some(crate::app::Command::ToggleCast),
                 OPEN_SETTINGS => Some(crate::app::Command::OpenSettings),
                 OPEN_LOG_DIR => {
-                    if let Ok(dir) = crate::config::Config::config_dir() {
-                        let _ = open::that(dir);
+                    match crate::config::Config::config_dir() {
+                        Ok(dir) => {
+                            if let Err(error) = open::that(&dir) {
+                                crate::log_error!(
+                                    "opening config directory '{}': {error}",
+                                    dir.display()
+                                );
+                            }
+                        }
+                        Err(error) => {
+                            crate::log_error!("resolving config directory: {error}");
+                        }
                     }
                     None
                 }
@@ -119,13 +142,6 @@ pub fn run(sender: mpsc::Sender<crate::app::Command>) -> Result<()> {
                 && let Err(error) = sender.send(cmd)
             {
                 crate::log_error!("sending tray command: {error}");
-            }
-            if id.0 == TOGGLE_CAST {
-                let casting = !CASTING.load(Ordering::Relaxed);
-                CASTING.store(casting, Ordering::Relaxed);
-                if let Err(error) = handle.set_menu(menu(casting, crate::i18n::lang())) {
-                    crate::log_error!("updating tray menu: {error}");
-                }
             }
             if id.0 == QUIT
                 && let Err(error) = handle.quit()
@@ -166,8 +182,15 @@ pub fn notify_error(message: &str) {
     if let Some(handle) = TRAY_HANDLE.get() {
         let icon = match Icon::from_rgba(TRAY_ICON_SIZE, TRAY_ICON_SIZE, TRAY_ICON_RGBA.to_vec()) {
             Ok(icon) => icon,
-            Err(_) => return,
+            Err(error) => {
+                // log_warn, not log_error: ERROR-level logging re-enters
+                // notify_error and would recurse.
+                crate::log_warn!("building tray notification icon: {error}");
+                return;
+            }
         };
-        let _ = handle.notify(Notification::new("mini-mdr", message).with_icon(icon));
+        if let Err(error) = handle.notify(Notification::new("mini-mdr", message).with_icon(icon)) {
+            crate::log_warn!("showing tray notification: {error}");
+        }
     }
 }

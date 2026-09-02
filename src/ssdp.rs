@@ -13,18 +13,20 @@ use std::{
 const MULTICAST_ADDRESS: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(239, 255, 255, 250)), 1900);
 const DEVICE_TYPE: &str = "urn:schemas-upnp-org:device:MediaRenderer:1";
-const UDN: &str = "uuid:mini-mdr";
 const SERVICE_AVTRANSPORT: &str = "urn:schemas-upnp-org:service:AVTransport:1";
 const SERVICE_RENDERING_CONTROL: &str = "urn:schemas-upnp-org:service:RenderingControl:1";
 const SERVICE_CONNECTION_MANAGER: &str = "urn:schemas-upnp-org:service:ConnectionManager:1";
-const ADVERTISED_TARGETS: [&str; 6] = [
-    "upnp:rootdevice",
-    UDN,
-    DEVICE_TYPE,
-    SERVICE_AVTRANSPORT,
-    SERVICE_RENDERING_CONTROL,
-    SERVICE_CONNECTION_MANAGER,
-];
+
+fn advertised_targets(udn: &str) -> [&str; 6] {
+    [
+        "upnp:rootdevice",
+        udn,
+        DEVICE_TYPE,
+        SERVICE_AVTRANSPORT,
+        SERVICE_RENDERING_CONTROL,
+        SERVICE_CONNECTION_MANAGER,
+    ]
+}
 
 /// Seconds after startup during which alive notifications are sent at a high
 /// frequency so a controller that starts scanning a few seconds later still
@@ -41,7 +43,7 @@ pub struct SsdpServer {
 }
 
 impl SsdpServer {
-    pub fn start(http_port: u16, device_name: &str) -> Result<Self> {
+    pub fn start(http_port: u16, device_name: &str, udn: &str) -> Result<Self> {
         let socket =
             UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1900)).context("binding SSDP UDP port 1900")?;
         socket.set_read_timeout(Some(Duration::from_millis(300)))?;
@@ -66,6 +68,7 @@ impl SsdpServer {
         let running = Arc::new(AtomicBool::new(true));
         let active = Arc::clone(&running);
         let name = sanitize_header_value(device_name);
+        let udn = sanitize_header_value(udn);
         let thread = thread::Builder::new().name("ssdp".into()).spawn(move || {
             for (ifname, ip) in list_afinet_netifas().unwrap_or_default() {
                 crate::log_info!("[ssdp-diag] iface {ifname} = {ip}");
@@ -81,7 +84,7 @@ impl SsdpServer {
             }
             let senders = create_multicast_senders(&local_ips);
             for _ in 0..3 {
-                announce(&senders, http_port, &name, "ssdp:alive");
+                announce(&senders, http_port, &name, "ssdp:alive", &udn);
                 thread::sleep(Duration::from_millis(200));
             }
             let warmup_until = Instant::now() + Duration::from_secs(WARMUP_SECS);
@@ -98,6 +101,7 @@ impl SsdpServer {
                             &name,
                             &local_ips,
                             http_port,
+                            &udn,
                         );
                     }
                     Err(error)
@@ -117,11 +121,11 @@ impl SsdpServer {
                     Duration::from_secs(STEADY_ANNOUNCE_SECS)
                 };
                 if now.duration_since(last_announce) >= interval {
-                    announce(&senders, http_port, &name, "ssdp:alive");
+                    announce(&senders, http_port, &name, "ssdp:alive", &udn);
                     last_announce = now;
                 }
             }
-            announce(&senders, http_port, &name, "ssdp:byebye");
+            announce(&senders, http_port, &name, "ssdp:byebye", &udn);
         })?;
         Ok(Self {
             running,
@@ -138,6 +142,7 @@ fn respond_to_search(
     name: &str,
     local_ips: &[Ipv4Addr],
     http_port: u16,
+    udn: &str,
 ) {
     let request = String::from_utf8_lossy(data);
     if !request
@@ -147,20 +152,19 @@ fn respond_to_search(
     {
         return;
     }
-    crate::log_info!("[ssdp-diag] M-SEARCH from {peer}, responding with location {location}");
     let search_target = header(&request, "ST").unwrap_or_default();
     let targets: Vec<&str> = if search_target.eq_ignore_ascii_case("ssdp:all") {
-        ADVERTISED_TARGETS.to_vec()
+        advertised_targets(udn).to_vec()
     } else if search_target.eq_ignore_ascii_case("upnp:rootdevice") {
         vec!["upnp:rootdevice"]
-    } else if search_target.eq_ignore_ascii_case(UDN) {
-        vec![UDN]
+    } else if search_target.eq_ignore_ascii_case(udn) {
+        vec![udn]
     } else if search_target.eq_ignore_ascii_case(DEVICE_TYPE)
         || search_target.eq_ignore_ascii_case("urn:schemas-upnp-org:device:MediaRenderer:3")
     {
         vec![DEVICE_TYPE]
     } else {
-        match ADVERTISED_TARGETS
+        match advertised_targets(udn)
             .iter()
             .find(|target| search_target.eq_ignore_ascii_case(target))
         {
@@ -173,7 +177,7 @@ fn respond_to_search(
         .map(|ip| format!("http://{ip}:{http_port}/device.xml"))
         .unwrap_or_else(|| location.to_owned());
     for target in targets {
-        let usn = usn(target);
+        let usn = usn(target, udn);
         let response = format!(
             "HTTP/1.1 200 OK\r\n\
              CACHE-CONTROL: max-age=1800\r\n\
@@ -192,8 +196,8 @@ fn respond_to_search(
     }
 }
 
-fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str) {
-    for target in ADVERTISED_TARGETS {
+fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str, udn: &str) {
+    for target in advertised_targets(udn) {
         let date = timestamp_rfc1123();
         let base = format!(
             "NOTIFY * HTTP/1.1\r\n\
@@ -203,7 +207,7 @@ fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str) 
              USN: {}\r\n\
              SERVER: {name}\r\n\
              DATE: {date}\r\n",
-            usn(target)
+            usn(target, udn)
         );
         for sender in senders {
             let mut message = base.clone();
@@ -225,11 +229,11 @@ fn announce(senders: &[MulticastSender], http_port: u16, name: &str, nts: &str) 
     }
 }
 
-fn usn(target: &str) -> String {
-    if target == UDN {
-        UDN.into()
+fn usn(target: &str, udn: &str) -> String {
+    if target == udn {
+        udn.into()
     } else {
-        format!("{UDN}::{target}")
+        format!("{udn}::{target}")
     }
 }
 
@@ -533,10 +537,26 @@ impl Drop for SsdpServer {
 mod tests {
     use super::*;
 
+    const TEST_UDN: &str = "uuid:test-mini-mdr-123";
+
     #[test]
     fn builds_correct_usn() {
-        assert_eq!(usn(UDN), UDN);
-        assert_eq!(usn(DEVICE_TYPE), format!("{UDN}::{DEVICE_TYPE}"));
+        assert_eq!(usn(TEST_UDN, TEST_UDN), TEST_UDN);
+        assert_eq!(
+            usn(DEVICE_TYPE, TEST_UDN),
+            format!("{TEST_UDN}::{DEVICE_TYPE}")
+        );
+    }
+
+    #[test]
+    fn advertised_targets_use_instance_udn() {
+        let targets = advertised_targets(TEST_UDN);
+        assert_eq!(targets[0], "upnp:rootdevice");
+        assert_eq!(targets[1], TEST_UDN);
+        assert!(targets.contains(&DEVICE_TYPE));
+        assert!(targets.contains(&SERVICE_AVTRANSPORT));
+        assert!(targets.contains(&SERVICE_RENDERING_CONTROL));
+        assert!(targets.contains(&SERVICE_CONNECTION_MANAGER));
     }
 
     #[test]
@@ -610,6 +630,7 @@ mod tests {
             "mini-mdr",
             &local_ips,
             7878,
+            TEST_UDN,
         );
         let mut buf = [0; 4096];
         let (n, _from) = phone.recv_from(&mut buf).unwrap();
@@ -617,7 +638,7 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 200 OK"), "got: {response}");
         assert!(response.contains("LOCATION: http://127.0.0.1:7878/device.xml"));
         assert!(response.contains("ST: upnp:rootdevice"));
-        assert!(response.contains(&format!("USN: {UDN}::upnp:rootdevice")));
+        assert!(response.contains(&format!("USN: {TEST_UDN}::upnp:rootdevice")));
     }
 
     #[test]
@@ -629,7 +650,9 @@ mod tests {
             .unwrap();
         let peer = phone.local_addr().unwrap();
         let local_ips = vec![Ipv4Addr::LOCALHOST];
-        let msearch = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 5\r\nST: uuid:mini-mdr\r\n\r\n";
+        let msearch = format!(
+            "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 5\r\nST: {TEST_UDN}\r\n\r\n"
+        );
         respond_to_search(
             &device,
             msearch.as_bytes(),
@@ -638,11 +661,12 @@ mod tests {
             "mini-mdr",
             &local_ips,
             7878,
+            TEST_UDN,
         );
         let mut buf = [0; 4096];
         let (n, _from) = phone.recv_from(&mut buf).unwrap();
         let response = String::from_utf8_lossy(&buf[..n]);
-        assert!(response.contains(&format!("ST: {UDN}")));
-        assert!(response.contains(&format!("USN: {UDN}")));
+        assert!(response.contains(&format!("ST: {TEST_UDN}")));
+        assert!(response.contains(&format!("USN: {TEST_UDN}")));
     }
 }

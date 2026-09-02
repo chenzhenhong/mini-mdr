@@ -35,12 +35,14 @@ priority = "optional"
 assets = [
     ["target/release/mini-mdr", "usr/bin/", "755"],
 ]
-depends = "libmpv2"
+# mini-mdr spawns the external `mpv`/`vlc` executables over IPC; it never links
+# libmpv2, so the player binaries are recommended rather than hard-required
+# (cast still starts without a player and returns UPnP 501 faults).
+recommends = "mpv, vlc"
 
 [package.metadata.bundle]
 name = "mini-mdr"
 identifier = "com.mini-mdr.app"
-icon = "resources/icon.icns"
 category = "public.app-category.music"
 short-description = "UPnP/DLNA MediaRenderer"
 

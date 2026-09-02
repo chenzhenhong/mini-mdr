@@ -39,6 +39,49 @@ pub struct HistoryEntry {
     pub title: Option<String>,
 }
 
+#[derive(Clone, Copy)]
+struct LocalTime {
+    year: i64,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+}
+
+#[cfg(unix)]
+fn local_time(timestamp: libc::time_t) -> Option<LocalTime> {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let result = unsafe { libc::localtime_r(&timestamp, &mut tm) };
+    if result.is_null() {
+        return None;
+    }
+    Some(LocalTime {
+        year: i64::from(tm.tm_year) + 1900,
+        month: (tm.tm_mon + 1) as u32,
+        day: tm.tm_mday as u32,
+        hour: tm.tm_hour as u32,
+        minute: tm.tm_min as u32,
+        second: tm.tm_sec as u32,
+    })
+}
+
+#[cfg(windows)]
+fn local_time(timestamp: libc::time_t) -> Option<LocalTime> {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    if unsafe { libc::localtime_s(&mut tm, &timestamp) } != 0 {
+        return None;
+    }
+    Some(LocalTime {
+        year: i64::from(tm.tm_year) + 1900,
+        month: (tm.tm_mon + 1) as u32,
+        day: tm.tm_mday as u32,
+        hour: tm.tm_hour as u32,
+        minute: tm.tm_min as u32,
+        second: tm.tm_sec as u32,
+    })
+}
+
 impl HistoryEntry {
     pub fn new(uri: String, title: Option<String>) -> Self {
         let timestamp = SystemTime::now()
@@ -53,6 +96,18 @@ impl HistoryEntry {
     }
 
     pub fn time_str(&self) -> String {
+        if let Ok(timestamp) = libc::time_t::try_from(self.timestamp)
+            && let Some(time) = local_time(timestamp)
+        {
+            return format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                time.year, time.month, time.day, time.hour, time.minute, time.second
+            );
+        }
+        if self.timestamp > 253_402_300_799 {
+            return self.timestamp.to_string();
+        }
+        // Fall back to UTC when the local-time conversion fails.
         let days = self.timestamp / 86400;
         let secs = self.timestamp % 86400;
         let hours = secs / 3600;

@@ -9,10 +9,21 @@ pub enum Language {
 }
 
 impl Language {
-    fn id(&self) -> LanguageIdentifier {
-        match self {
-            Self::En => "en".parse().expect("valid langid"),
-            Self::Zh => "zh-CN".parse().expect("valid langid"),
+    /// Resolves the static, known-good language tag for this language. Returns
+    /// `None` only if a hardcoded tag fails to parse, which cannot happen in
+    /// practice. An `Option` keeps callers from depending on the crate's parse
+    /// error type, which is not a stable public API.
+    fn id(&self) -> Option<LanguageIdentifier> {
+        let raw = match self {
+            Self::En => "en",
+            Self::Zh => "zh-CN",
+        };
+        match raw.parse() {
+            Ok(id) => Some(id),
+            Err(_) => {
+                crate::log_error!("static language tag {raw:?} failed to parse");
+                None
+            }
         }
     }
 
@@ -71,14 +82,36 @@ thread_local! {
 fn with_bundle<T>(lang: Language, f: impl FnOnce(&FluentBundle<FluentResource>) -> T) -> T {
     BUNDLE.with(|cell| {
         let mut guard = cell.borrow_mut();
-        if guard.as_ref().map(|(l, _)| *l) != Some(lang) {
-            let mut bundle = FluentBundle::new(vec![lang.id()]);
-            let res = FluentResource::try_new(lang.ftl().to_owned())
-                .expect("embedded .ftl is valid UTF-8");
-            bundle.add_resource(res).expect("no duplicate message IDs");
+        if guard.as_ref().map(|(stored, _)| *stored) != Some(lang) {
+            let mut bundle = match lang.id() {
+                Some(id) => FluentBundle::new(vec![id]),
+                None => {
+                    crate::log_error!("building langid for {lang:?} failed");
+                    FluentBundle::new(Vec::new())
+                }
+            };
+            match FluentResource::try_new(lang.ftl().to_owned()) {
+                Ok(resource) => {
+                    if let Err(errors) = bundle.add_resource(resource) {
+                        crate::log_error!("loading {lang:?} translations: {errors:?}");
+                    }
+                }
+                Err((_, errors)) => {
+                    crate::log_error!("parsing {lang:?} translations: {errors:?}");
+                }
+            }
             *guard = Some((lang, bundle));
         }
-        f(&guard.as_ref().unwrap().1)
+        match guard.as_ref() {
+            Some((_, bundle)) => f(bundle),
+            None => {
+                // Unreachable in practice: the branch above always stores a
+                // bundle. Falling back to an empty bundle keeps translation
+                // working (keys are returned verbatim) instead of panicking.
+                crate::log_error!("translations unavailable for {lang:?}");
+                f(&FluentBundle::<FluentResource>::new(Vec::new()))
+            }
+        }
     })
 }
 

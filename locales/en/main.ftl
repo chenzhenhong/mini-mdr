@@ -41,6 +41,9 @@ tab-guide = Guide
 about-title = About
 about-subtitle = Learn more about mini-mdr.
 about-description = mini-mdr is a tray-only UPnP/DLNA MediaRenderer. It advertises a DMR on your LAN and plays media through mpv or VLC.
+about-version = Version
+about-repository = Repository
+about-license = License
 
 # Guide page
 guide-title = Guide
@@ -59,10 +62,13 @@ error-name-control = Device name must not contain control characters
 error-unsupported-backend = Unsupported player backend
 error-player-path-empty = Player executable path must not be empty
 error-language-invalid = Unknown language selection
+error-cross-origin = Cross-origin requests are not allowed
+error-not-found = Not found
 
 # State display
 cast-stopped = Stopped
 cast-running = Running
+status-upnp = UPnP
 transport-no-media = No Media
 transport-stopped = Stopped
 transport-playing = Playing

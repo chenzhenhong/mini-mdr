@@ -38,8 +38,16 @@ impl App {
         let app_thread = std::thread::Builder::new()
             .name("mini-mdr-app".into())
             .spawn(move || self.command_loop(receiver))?;
+        let quit_sender = sender.clone();
 
         let tray_result = crate::tray::run(sender);
+        if let Err(error) = &tray_result {
+            crate::log_error!("tray event loop failed: {error:#}");
+        }
+        // The tray loop owns the primary sender. Guarantee the application
+        // thread observes a quit even when the tray exits without sending one
+        // (for example after an error), so joining it cannot hang.
+        let _ = quit_sender.send(Command::Quit);
         let app_result = app_thread
             .join()
             .map_err(|_| anyhow::anyhow!("application thread panicked"))?;
@@ -52,6 +60,7 @@ impl App {
             Ok(()) => crate::log_info!("auto-started cast"),
             Err(error) => crate::log_error!("auto-starting cast: {error:#}"),
         }
+        crate::tray::set_casting(self.cast.is_some());
         match self.ensure_settings() {
             Ok(()) => crate::log_info!("auto-started settings server"),
             Err(error) => crate::log_error!("auto-starting settings server: {error:#}"),
@@ -84,14 +93,20 @@ impl App {
             )?));
         let upnp = crate::upnp::UpnpServer::start(
             &config.device.name,
+            &config.device.udn,
             Arc::clone(&player),
             Arc::clone(&self.state),
             config.settings.max_history,
         )?;
-        let ssdp = match crate::ssdp::SsdpServer::start(upnp.port(), &config.device.name) {
+        let ssdp = match crate::ssdp::SsdpServer::start(
+            upnp.port(),
+            &config.device.name,
+            &config.device.udn,
+        ) {
             Ok(server) => server,
             Err(error) => {
                 drop(upnp);
+                crate::tray::set_casting(false);
                 return Err(error);
             }
         };
@@ -105,18 +120,21 @@ impl App {
             state.upnp_address = upnp_addr.clone();
         }
         crate::web::publish_status(true, upnp_addr);
+        crate::tray::set_casting(true);
         crate::log_info!("cast started on port {upnp_port}");
         Ok(())
     }
 
     fn stop_cast(&mut self) -> Result<()> {
+        // Close the protocol server before releasing the player so requests
+        // already accepted by the server cannot outlive the Cast lifecycle.
+        self.cast = None;
         if let Some(player) = &self.player
             && let Ok(mut player) = player.lock()
             && let Err(error) = player.stop()
         {
             crate::log_error!("stopping current media: {error:#}");
         }
-        self.cast = None;
         self.player = None;
         let mut state = lock(&self.state)?;
         state.cast = crate::state::CastState::Stopped;
@@ -126,7 +144,9 @@ impl App {
         state.position = std::time::Duration::ZERO;
         state.uri = None;
         state.title = None;
+        state.muted = false;
         crate::log_info!("cast stopped");
+        crate::tray::set_casting(false);
         Ok(())
     }
 
