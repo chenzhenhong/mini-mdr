@@ -828,7 +828,7 @@ fn sse_stream(
             }
             Err(RecvTimeoutError::Timeout) => {
                 ticks += 1;
-                if ticks % 30 == 0 && !send_comment(stream) {
+                if ticks.is_multiple_of(30) && !send_comment(stream) {
                     break;
                 }
             }
